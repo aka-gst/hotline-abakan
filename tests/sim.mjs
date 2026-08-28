@@ -35,6 +35,29 @@ function run(world, seconds, intentFor) {
   }
 }
 
+/*
+ * Удар перестал быть мгновенным: кнопка бросает рывок в руку, и оружие
+ * доходит до цели за несколько кадров. Поэтому во всех проверках бьют
+ * через этого помощника, а не одним вызовом update.
+ */
+function strike(world, victim, feed) {
+  const player = world.player;
+  player.cooldown = 0;
+  player.x = victim.x - 30;
+  player.y = victim.y;
+  player.angle = 0;
+  player.arm = 0;
+  player.tip = { x: player.x + 38, y: player.y };
+
+  const step = (intent) => {
+    update(world, DT, intent);
+    if (feed) feed();
+  };
+
+  step({ ...idle, aimAngle: 0, attack: true });
+  for (let i = 0; i < 8; i += 1) step({ ...idle, aimAngle: 0 });
+}
+
 function nearest(world) {
   let best = null, dist = Infinity;
   for (const enemy of world.enemies) {
@@ -60,17 +83,12 @@ function nearest(world) {
 {
   const world = createWorld(CAMPAIGN[0]);
   const victim = world.enemies[0];
-  const player = world.player;
-  player.x = victim.x - 20;
-  player.y = victim.y;
-  player.angle = 0;
 
-  update(world, DT, { ...idle, attack: true });
+  strike(world, victim);
   check('кулаком враг сбит с ног, но жив', victim.downed > 0 && victim.alive,
     `downed=${victim.downed.toFixed(2)} alive=${victim.alive}`);
 
-  run(world, 0.4);
-  update(world, DT, { ...idle, attack: true });
+  strike(world, victim);
   check('добивание лежачего засчитано', !victim.alive && world.kills === 1,
     `kills=${world.kills}`);
   check('после смерти на полу осталось оружие', world.pickups.some((p) => p.weapon === 'bat'));
@@ -180,22 +198,17 @@ function nearest(world) {
     score.update(DT);
   };
 
-  /* Ставим игрока с битой вплотную к цели и бьём. */
-  const strike = (victim) => {
-    player.weapon = 'bat';
-    player.cooldown = 0;
-    player.x = victim.x - 20;
-    player.y = victim.y;
-    player.angle = 0;
-    step({ ...idle, attack: true });
+  const hit = (victim, weapon = 'bat') => {
+    player.weapon = weapon;
+    strike(world, victim, () => { score.feed(world.events); score.update(DT); });
   };
 
   const alive = world.enemies.filter((e) => e.alive);
-  strike(alive[0]);
+  hit(alive[0]);
   const first = score.state.score;
   check('первое убийство стоит базовых очков', first === 100, String(first));
 
-  strike(alive[1]);
+  hit(alive[1]);
   check('второе подряд идёт с множителем ×2', score.state.score === 300, String(score.state.score));
   check('множитель показан верно', score.state.combo === 2, String(score.state.combo));
 
@@ -204,24 +217,18 @@ function nearest(world) {
   check('пауза обрывает цепочку', score.state.combo === 0, String(score.state.combo));
 
   const before = score.state.score;
-  strike(alive[2]);
+  hit(alive[2]);
   check('после паузы снова базовая цена', score.state.score - before === 100,
     String(score.state.score - before));
 
   /* Кулаком сбить, кулаком добить: добивание дороже обычного удара. */
   const victim = alive[3];
-  player.weapon = 'fists';
-  player.cooldown = 0;
-  player.x = victim.x - 18;
-  player.y = victim.y;
-  player.angle = 0;
-  step({ ...idle, attack: true });
-  check('кулак не убивает, а сбивает', victim.alive && victim.downed > 0);
+  hit(victim, 'fists');
+  check('кулак не убивает, а сбивает', victim.alive && victim.downed > 0,
+    `жив=${victim.alive} лежит=${victim.downed.toFixed(2)}`);
 
   const beforeExecution = score.state.score;
-  for (let i = 0; i < 0.4 / DT; i += 1) step();
-  player.cooldown = 0;
-  step({ ...idle, attack: true });
+  hit(victim, 'fists');
   const gained = score.state.score - beforeExecution;
   check('добивание лежачего дороже удара', gained === 300, `получено ${gained} при цепочке 2`);
   check('казнь посчитана отдельно', score.state.executions === 1);
@@ -314,9 +321,84 @@ function nearest(world) {
   player.cooldown = 0;
   const angle = closeThreat(world);
   const finalAngle = meleeSnap(world, angle === null ? player.angle : angle) ?? angle;
+  player.arm = finalAngle;
+  player.tip = { x: player.x + Math.cos(finalAngle) * 38, y: player.y + Math.sin(finalAngle) * 38 };
   update(world, DT, { moveX: 0, moveY: 0, aimAngle: finalAngle, attack: true });
+  for (let i = 0; i < 8; i += 1) update(world, DT, { moveX: 0, moveY: 0, aimAngle: finalAngle, attack: false });
   check('стоя без движения, удар по соседу засчитан', !near.alive,
     near.alive ? 'враг цел' : 'враг убит');
+}
+
+/* --- G. Физика маха --- */
+{
+  /*
+   * Оружие висит на теле и режет скоростью вращения, а не фактом нажатия.
+   * Числа ниже — это и есть правило игры, поэтому они закреплены:
+   *
+   *   кнопка                     ~930  убивает
+   *   мах мышью на 180°          ~356  убивает
+   *   доворот автонаводки на 90° ~178  нет
+   *   спокойный поворот на бегу   ~55  нет
+   *   бег по прямой                 0  нет
+   *
+   * Порог проходит между третьей и второй строкой: своя рука убивает,
+   * автоматика — нет. Иначе автонаводка, доворачивающая игрока к цели,
+   * убивала бы за него, и стелс перестал бы существовать.
+   */
+  const swing = (name, setup, drive, frames = 45) => {
+    const world = createWorld(CAMPAIGN[0]);
+    const player = world.player;
+    const victim = world.enemies[0];
+    player.weapon = 'bat';
+    setup(player, victim);
+    player.tip = { x: player.x + Math.cos(player.arm) * 38, y: player.y + Math.sin(player.arm) * 38 };
+
+    let peak = 0;
+    for (let i = 0; i < frames; i += 1) {
+      world.fx.hitstop = 0;
+      update(world, DT, drive(player, victim, i));
+      peak = Math.max(peak, player.swingSpeed || 0);
+    }
+    return { dead: !victim.alive, peak, name };
+  };
+
+  const near = (p, e) => { p.x = e.x - 30; p.y = e.y; p.angle = 0; p.arm = 0; };
+
+  const button = swing('кнопка', near, (p, e, i) => ({ ...idle, aimAngle: 0, attack: i === 0 }));
+  check('кнопка бьёт', button.dead, `пик ${button.peak | 0}`);
+
+  const still = swing('стоим', near, () => ({ ...idle, aimAngle: 0 }));
+  check('стоя вплотную и не махая, не убиваешь', !still.dead, `пик ${still.peak | 0}`);
+
+  const straight = swing('бег мимо',
+    (p, e) => { p.x = e.x - 120; p.y = e.y - 34; p.angle = 0; p.arm = 0; },
+    () => ({ ...idle, moveX: 1, aimAngle: 0 }));
+  check('бег по прямой мимо никого не режет', !straight.dead, `пик ${straight.peak | 0}`);
+
+  const flick = swing('мышь 180°',
+    (p, e) => { p.x = e.x - 30; p.y = e.y; p.angle = Math.PI; p.arm = Math.PI; },
+    (p, e, i) => ({ ...idle, aimAngle: i > 3 ? 0 : Math.PI }));
+  check('резкий разворот рукой убивает', flick.dead, `пик ${flick.peak | 0}`);
+
+  const assisted = swing('автонаводка 90°',
+    (p, e) => { p.x = e.x - 30; p.y = e.y; p.angle = -1.57; p.arm = -1.57; },
+    (p, e, i) => ({ ...idle, aimAngle: i > 5 ? 0 : -1.57 }));
+  check('доворот автонаводки не убивает за игрока', !assisted.dead, `пик ${assisted.peak | 0}`);
+
+  /* Одно нажатие — одно попадание: связка «сбить и добить» остаётся из двух решений. */
+  const world = createWorld(CAMPAIGN[0]);
+  const victim = world.enemies[0];
+  const player = world.player;
+  player.weapon = 'fists';
+  player.x = victim.x - 24;
+  player.y = victim.y;
+  player.angle = 0;
+  player.arm = 0;
+  player.tip = { x: player.x + 28, y: player.y };
+  update(world, DT, { ...idle, aimAngle: 0, attack: true });
+  for (let i = 0; i < 10; i += 1) update(world, DT, { ...idle, aimAngle: 0 });
+  check('за один мах кулак сбивает, но не добивает',
+    victim.alive && victim.downed > 0, `жив=${victim.alive}`);
 }
 
 /* --- F. Производительность шага --- */

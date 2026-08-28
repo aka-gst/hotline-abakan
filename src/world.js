@@ -43,6 +43,37 @@ const PLAYER_ACCEL = 3600;
 const ENEMY_WALK = 70;
 const ENEMY_RUN = 152;
 const DOWN_TIME = 2;
+
+/*
+ * Физика замаха.
+ *
+ * Оружие не появляется в момент нажатия и не исчезает после: оно висит на
+ * теле и тянется за поворотом с отставанием. Убивает не факт удара, а
+ * скорость кончика — поэтому бег по дуге вокруг врага смертелен сам по
+ * себе, а тычок стоящего на месте не стоит ничего.
+ *
+ * Кнопка удара осталась, но делает она теперь одно: бросает в руку резкий
+ * импульс. То есть это не второй способ бить, а тот же самый.
+ */
+const ARM_FOLLOW = 26;      /* насколько сильно рука тянется за прицелом */
+const ARM_DRAG = 4.5;       /* сопротивление: без него рука колеблется вечно */
+const SWING_IMPULSE = 26;   /* рывок от кнопки, рад/с */
+const SWING_WINDUP = 0.85;  /* на столько рука отводится назад перед махом */
+
+/*
+ * Порог убийства считается по вращению руки, а не по скорости кончика в
+ * мире. Первая версия мерила вторым — и оказалось, что бег по прямой сам
+ * по себе даёт кончику скорость тела: оружие «убивало» просто потому, что
+ * игрок быстро идёт. Режет не перенос, а мах, поэтому в счёт идёт только
+ * угловая скорость.
+ *
+ * 220 единиц выбраны по замерам: кнопка даёт 930, разворот мышью на 180°
+ * — около 350, аккуратный доворот автонаводки на 90° — 178, спокойный
+ * поворот на бегу — 53. Порог проходит между двумя последними: своя рука
+ * убивает, автоматика — нет. Иначе автонаводка, доворачивающая
+ * игрока к цели, убивала бы за него.
+ */
+const KILL_SWING_SPEED = 220;
 const BULLET_LIFE = 1.6;
 
 
@@ -230,6 +261,20 @@ export function createWorld(level) {
       cooldown: 0,
       swing: 0,
       step: 0,
+
+      /* Рука живёт своей инерцией: угол, скорость и след кончика. */
+      arm: (level.spawn.angle || 0) * (Math.PI / 4),
+      armVel: 0,
+      side: 1,
+      /* Кончик известен с самого начала: иначе первый же мах не измерится. */
+      tip: {
+        x: level.spawn.x * TILE_SIZE + TILE_SIZE / 2
+          + Math.cos((level.spawn.angle || 0) * (Math.PI / 4)) * 28,
+        y: level.spawn.y * TILE_SIZE + TILE_SIZE / 2
+          + Math.sin((level.spawn.angle || 0) * (Math.PI / 4)) * 28,
+      },
+      tipSpeed: 0,
+      trail: [],
     },
 
     enemies: [],
@@ -333,6 +378,133 @@ function fireGun(world, shooter, from) {
  * Удар — не снаряд, а мгновенная проверка сектора. Так он честно
  * попадает по тому, кого игрок видел на экране в момент нажатия.
  */
+/*
+ * Единственное место, где ближний удар превращается в смерть. Через него
+ * идут и мах игрока, и замах врага: иначе правила добивания и щитов
+ * разъехались бы по двум веткам.
+ */
+function landMelee(world, attacker, target, angle, weapon, from) {
+  if (target === world.player) {
+    killPlayer(world, angle);
+    return;
+  }
+
+  if (weapon.lethal || target.downed > 0) {
+    killEnemy(world, target, angle, 'melee', {
+      by: from,
+      weapon: attacker.weapon,
+      execution: target.downed > 0,
+    });
+  } else {
+    knockDown(world, target, angle);
+  }
+}
+
+
+/*
+ * Мах игрока. Кончик оружия за кадр проходит отрезок; всё, что этот
+ * отрезок задел на достаточной скорости, получает удар. Попадание съедает
+ * инерцию — выкосить толпу одним взмахом нельзя, руку придётся разгонять
+ * заново.
+ */
+function updateArm(world, dt, intent) {
+  const player = world.player;
+  const weapon = WEAPONS[player.weapon];
+  const reach = weapon.kind === 'melee' ? weapon.reach : 20;
+
+  const delta = angleDelta(player.arm, player.angle);
+  player.armVel += (delta * ARM_FOLLOW - player.armVel * ARM_DRAG) * dt;
+  player.arm += player.armVel * dt;
+
+  const tip = {
+    x: player.x + Math.cos(player.arm) * reach,
+    y: player.y + Math.sin(player.arm) * reach,
+  };
+  const previous = player.tip || tip;
+  player.tipSpeed = Math.hypot(tip.x - previous.x, tip.y - previous.y) / Math.max(dt, 0.0001);
+  /* Режущая скорость — только от вращения: перенос тела не рубит. */
+  player.swingSpeed = Math.abs(player.armVel) * reach;
+
+  /* Кончик уткнулся в стену — мах гаснет об неё, и это слышно. */
+  if (blocksMove(tileAt(world, tip.x, tip.y))) {
+    if (Math.abs(player.armVel) > 6) {
+      spark(world, tip.x, tip.y, player.arm + Math.PI, 1.2, 5, '#cfc3ff', 120);
+      emitNoise(world, tip.x, tip.y, 130, 'player');
+      world.events.push({ type: 'clang' });
+      world.fx.shake = Math.max(world.fx.shake, 2.5);
+    }
+    player.armVel *= -0.25;
+    player.arm = previous === tip ? player.arm : Math.atan2(previous.y - player.y, previous.x - player.x);
+  }
+
+  /*
+   * Скачок кончика больше кадра реального маха — это не удар, а перенос
+   * тела: перезапуск этажа, смена оружия, отладочная телепортация. Такой
+   * кадр не бьёт никого, иначе игрок «убивает» тех, мимо кого его просто
+   * переставили.
+   */
+  const teleported = Math.hypot(tip.x - previous.x, tip.y - previous.y) > 120;
+
+  /*
+   * Один мах — одно попадание в каждого. Оружие проходит сквозь цель и на
+   * возврате задевает её снова, и без этого правила одно нажатие успевало
+   * сбить кулаком и тут же добить лежачего: связка из двух решений
+   * схлопывалась в одну кнопку.
+   *
+   * Мах считается новым, когда рука разогналась заново, — то есть после
+   * того, как её скорость упала ниже боевой.
+   */
+  const fast = player.swingSpeed > KILL_SWING_SPEED;
+  if (fast && !player.swinging) {
+    player.swinging = true;
+    player.swingId = (player.swingId || 0) + 1;
+  } else if (!fast) {
+    player.swinging = false;
+  }
+
+  if (!teleported && weapon.kind === 'melee' && fast) {
+    for (const enemy of world.enemies) {
+      if (!enemy.alive) continue;
+      if (enemy.hitBy === player.swingId) continue;
+      if (segmentDistance(enemy.x, enemy.y, previous.x, previous.y, tip.x, tip.y) > BODY + 3) continue;
+      if (!hasSight(world, player.x, player.y, enemy.x, enemy.y)) continue;
+
+      enemy.hitBy = player.swingId;
+
+      const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+      landMelee(world, player, enemy, angle, weapon, 'player');
+
+      /* Тело гасит мах: следующего надо разгонять заново. */
+      player.armVel *= 0.45;
+      player.swing = 0.16;
+      player.swingHit = 0.2;
+      world.fx.hitstop = Math.max(world.fx.hitstop, 0.08);
+      world.fx.shake = Math.max(world.fx.shake, 7);
+      world.fx.punch = 1;
+      world.events.push({ type: 'impact', lethal: weapon.lethal, from: 'player' });
+    }
+  }
+
+  player.tip = tip;
+
+  /* Короткий след: по нему читается, разогнан мах или волочится. */
+  player.trail = player.trail || [];
+  player.trail.push({ x: tip.x, y: tip.y, speed: player.tipSpeed });
+  if (player.trail.length > 7) player.trail.shift();
+}
+
+/* Расстояние от точки до отрезка — им и меряется, задел ли кончик тело. */
+function segmentDistance(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const length = dx * dx + dy * dy;
+  if (length < 0.0001) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / length;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+
+
 function swingMelee(world, attacker, from) {
   const weapon = WEAPONS[attacker.weapon];
   attacker.cooldown = weapon.cooldown;
@@ -373,18 +545,7 @@ function swingMelee(world, attacker, from) {
   if (target) {
     const toTarget = Math.atan2(target.y - attacker.y, target.x - attacker.x);
 
-    if (target === world.player) {
-      killPlayer(world, toTarget);
-    } else if (weapon.lethal || target.downed > 0) {
-      /* Лежачего добивают даже кулаком — иначе сбитый враг бессмысленен. */
-      killEnemy(world, target, toTarget, 'melee', {
-        by: from,
-        weapon: attacker.weapon,
-        execution: target.downed > 0,
-      });
-    } else {
-      knockDown(world, target, toTarget);
-    }
+    landMelee(world, attacker, target, toTarget, weapon, from);
   }
 
   /*
@@ -620,9 +781,34 @@ function updatePlayer(world, dt, intent) {
         world.events.push({ type: 'dry' });
       }
     } else {
-      swingMelee(world, player, 'player');
+      /*
+       * Кнопка не наносит удар сама — она бросает в руку рывок. Дальше
+       * решает физика: разогнанный кончик убивает, вялый тычок нет. Так
+       * нажатие и разворот корпуса — одно и то же действие, а не два
+       * разных способа бить.
+       */
+      player.side = -player.side;
+
+      /*
+       * Замах и пронос. Раньше рывок уводил оружие в сторону от цели, и
+       * стоящий прямо перед носом враг оставался жив до обратного маха.
+       * Теперь рука сначала отводится назад, а мах идёт сквозь прицел —
+       * то есть ровно туда, куда смотрит игрок.
+       */
+      player.arm = player.angle - player.side * SWING_WINDUP;
+      player.armVel = player.side * SWING_IMPULSE;
+      player.tip = {
+        x: player.x + Math.cos(player.arm) * (WEAPONS[player.weapon].reach || 20),
+        y: player.y + Math.sin(player.arm) * (WEAPONS[player.weapon].reach || 20),
+      };
+      player.cooldown = weapon.cooldown;
+      player.swing = 0.16;
+      emitNoise(world, player.x, player.y, weapon.noise, 'player');
+      world.events.push({ type: 'swing', from: 'player', lethal: weapon.lethal });
     }
   }
+
+  updateArm(world, dt, intent);
 
   /* Выход открыт — стоя на нём, этаж считается сданным. */
   if (world.exitOpen && world.state === 'play' && tileAt(world, player.x, player.y) === TILE.EXIT) {
