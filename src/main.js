@@ -9,7 +9,7 @@
 import { CAMPAIGN } from './levels.js';
 import { decode, encode } from './level.js';
 import { createWorld, update, WEAPONS } from './world.js';
-import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim } from './aim.js';
+import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
 import { createRenderer } from './render.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
