@@ -257,7 +257,7 @@ export function createWorld(level) {
     flowTimer: 0,
     flowFrom: -1,
 
-    fx: { shake: 0, hitstop: 0, flash: 0, punch: 0 },
+    fx: { shake: 0, hitstop: 0, flash: 0, punch: 0, beat: 0 },
     events: [],
   };
 
@@ -557,6 +557,7 @@ export function update(world, dt, intent) {
   world.fx.shake = Math.max(0, world.fx.shake - dt * 26);
   world.fx.flash = Math.max(0, world.fx.flash - dt * 3.2);
   world.fx.punch = Math.max(0, world.fx.punch - dt * 4);
+  world.fx.beat = Math.max(0, world.fx.beat - dt * 5);
 
   if (world.state === 'play') world.time += dt;
 
@@ -596,6 +597,36 @@ function updatePlayer(world, dt, intent) {
   player.vy += clamp(targetY - player.vy, -PLAYER_ACCEL * dt, PLAYER_ACCEL * dt);
 
   moveBody(world, player, player.vx * dt, player.vy * dt);
+
+  /*
+   * Дверь как оружие. Влетевший в неё на бегу сбивает с ног того, кто
+   * стоит за ней, — и это единственная механика здесь, которая награждает
+   * за то, что игрок не остановился. Ровно за это жанр и любят: скорость
+   * должна быть решением, а не риском.
+   */
+  player.slam = Math.max(0, (player.slam || 0) - dt);
+  const dash = Math.hypot(player.vx, player.vy);
+
+  if (dash > 210 && player.slam <= 0) {
+    const ahead = {
+      x: player.x + (player.vx / dash) * 22,
+      y: player.y + (player.vy / dash) * 22,
+    };
+
+    if (tileAt(world, ahead.x, ahead.y) === TILE.DOOR) {
+      player.slam = 0.5;
+      emitNoise(world, ahead.x, ahead.y, 240, 'player');
+      world.events.push({ type: 'slam' });
+      world.fx.shake = Math.max(world.fx.shake, 5);
+
+      for (const enemy of world.enemies) {
+        if (!enemy.alive || enemy.downed > 0) continue;
+        if (Math.hypot(enemy.x - ahead.x, enemy.y - ahead.y) > 42) continue;
+        knockDown(world, enemy, Math.atan2(enemy.y - player.y, enemy.x - player.x));
+        world.fx.hitstop = Math.max(world.fx.hitstop, 0.05);
+      }
+    }
+  }
 
   player.step += Math.hypot(player.vx, player.vy) * dt;
   if (player.step > 26) {

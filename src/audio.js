@@ -34,6 +34,7 @@ export function createAudio() {
   let muted = false;
   let started = false;
   let intensity = 0;
+  let onBeat = null;
 
   try {
     muted = localStorage.getItem('avto-muted') === '1';
@@ -168,6 +169,8 @@ export function createAudio() {
     step() { noise(0.05, 'lowpass', 380, 0.11); },
     exit() { tone('triangle', 520, 1040, 0.35, 0.3); },
     ui() { tone('square', 300, 520, 0.06, 0.16); },
+    /* Дверь: тяжёлый деревянный хлопок, ни на что другое не похожий. */
+    slam() { tone('sine', 150, 45, 0.22, 0.6); noise(0.18, 'lowpass', 700, 0.45); },
 
     /* Демоны: набор ползёт вверх, выстрел щёлкает, луч гудит, вспышка бьёт. */
     /* Отбитая стихия: глухой шлепок и звон — ни с попаданием, ни с промахом
@@ -311,7 +314,19 @@ export function createAudio() {
       source.stop(at + tail);
     }
 
+    /*
+     * Доля отдаётся наружу: по ней кадр коротко «дышит». В Hotline Miami
+     * ритм — не фон, а метроном движения, и когда картинка живёт в том же
+     * такте, игрок начинает двигаться по нему, не думая об этом.
+     */
+    function beat(at) {
+      if (!onBeat) return;
+      const delay = Math.max(0, (at - ctx.currentTime) * 1000);
+      setTimeout(() => { if (onBeat) onBeat(); }, delay);
+    }
+
     function kick(at) {
+      beat(at);
       const osc = ctx.createOscillator();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(120, at);
@@ -451,6 +466,7 @@ export function createAudio() {
 
   return {
     unlock, sfx, playTrack, stop, setMenu, setIntensity, setMuted,
+    onBeat(callback) { onBeat = callback; },
     isMuted: () => muted,
     isPlaying: () => started,
     hasFiles: () => Boolean(manifest),

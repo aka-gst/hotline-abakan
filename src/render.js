@@ -21,38 +21,44 @@ import { TILE_SIZE, BODY, WEAPONS } from './world.js';
  * читался как лабиринт из неоновых полос: глаз принимал стены за
  * проходы. Здесь стена — тёмная масса с одной подсвеченной кромкой.
  */
+/*
+ * Палитра кислотная намеренно: у Hotline Miami цвет не описывает
+ * помещение, а задаёт пульс. Пол насыщенный и тёплый, стена — почти
+ * чёрная масса с одной ядовитой кромкой, и весь контраст держится на этой
+ * паре, а не на светотени.
+ */
 export const THEMES = [
   {
     name: 'бар',
-    floor: '#3a1d4d',
-    floorAlt: '#432257',
-    grout: '#24122f',
-    wall: '#100819',
-    wallTop: '#2b1640',
-    wallEdge: '#ff2d95',
-    door: '#5a2a7a',
-    rug: '#7a1a45',
-    table: '#4a2e1c',
-    tableEdge: '#ff9b52',
-    glass: '#7ad9ff',
-    haze: '#ff2d95',
+    floor: '#4a1f63',
+    floorAlt: '#57256f',
+    grout: '#2a1038',
+    wall: '#12081c',
+    wallTop: '#33184a',
+    wallEdge: '#ff1f8f',
+    door: '#7a2f9e',
+    rug: '#a01050',
+    table: '#5c3620',
+    tableEdge: '#ffa93d',
+    glass: '#5ce1ff',
+    haze: '#ff1f8f',
   },
 
-  /* Серверная: холоднее и жёстче бара — здесь светится не вывеска, а стойки. */
+  /* Серверная: та же кислота, но в холодном конце спектра. */
   {
     name: 'серверная',
-    floor: '#1a3748',
-    floorAlt: '#20404f',
-    grout: '#0d2130',
-    wall: '#050d14',
-    wallTop: '#12293a',
-    wallEdge: '#4de1ff',
-    door: '#1d5570',
-    rug: '#123a4a',
-    table: '#23333d',
-    tableEdge: '#7ad9ff',
-    glass: '#9be7ff',
-    haze: '#4de1ff',
+    floor: '#12414f',
+    floorAlt: '#16505f',
+    grout: '#08222c',
+    wall: '#04101a',
+    wallTop: '#0f3446',
+    wallEdge: '#2ce8ff',
+    door: '#1a6c8c',
+    rug: '#0f4a5c',
+    table: '#1d3b45',
+    tableEdge: '#7ef0ff',
+    glass: '#a8f2ff',
+    haze: '#2ce8ff',
   },
 ];
 
@@ -340,7 +346,8 @@ export function createRenderer(canvas) {
     camY = worldH <= halfH * 2 ? worldH / 2 : Math.max(halfH, Math.min(worldH - halfH, camY));
 
     /* Короткий наезд на попадании: кадр «клюёт» вперёд и возвращается. */
-    const punch = 1 + world.fx.punch * 0.035;
+    /* Наезд на попадании и короткий вдох на долю музыки. */
+    const punch = 1 + world.fx.punch * 0.035 + (world.fx.beat || 0) * 0.006;
     const shake = world.fx.shake;
     const shakeX = shake ? (Math.random() - 0.5) * shake : 0;
     const shakeY = shake ? (Math.random() - 0.5) * shake : 0;
@@ -379,6 +386,7 @@ export function createRenderer(canvas) {
       ctx.fillRect(0, 0, viewW, viewH);
     }
 
+    beatGlow = world.fx.beat || 0;
     vignette(ctx, theme);
 
     return { zoom, camX, camY };
@@ -659,13 +667,15 @@ export function createRenderer(canvas) {
     g.globalAlpha = 1;
   }
 
+  let beatGlow = 0;
+
   function vignette(g, theme) {
     const grad = g.createRadialGradient(
       viewW / 2, viewH / 2, Math.min(viewW, viewH) * 0.32,
       viewW / 2, viewH / 2, Math.max(viewW, viewH) * 0.78,
     );
     grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,.72)');
+    grad.addColorStop(1, `rgba(0,0,0,${0.72 - (beatGlow || 0) * 0.06})`);
     g.fillStyle = grad;
     g.fillRect(0, 0, viewW, viewH);
   }

@@ -323,6 +323,43 @@ function nearest(world) {
     near.alive ? 'враг цел' : 'враг убит');
 }
 
+/* --- G. Дверь как оружие --- */
+{
+  /*
+   * Единственная механика, которая награждает за то, что игрок не
+   * остановился. Проверяется именно это: влететь можно только на скорости,
+   * подойти и толкнуть — нельзя.
+   */
+  const findDoor = (world) => {
+    for (let i = 0; i < world.tiles.length; i += 1) {
+      if (world.tiles[i] !== 2) continue;
+      return { x: ((i % world.w) + 0.5) * TILE_SIZE, y: ((i / world.w | 0) + 0.5) * TILE_SIZE };
+    }
+    return null;
+  };
+
+  const slam = (speed) => {
+    const world = createWorld(CAMPAIGN[0]);
+    const door = findDoor(world);
+    const victim = world.enemies[0];
+
+    victim.x = door.x + 26;
+    victim.y = door.y;
+    victim.state = 'idle';
+
+    const player = world.player;
+    player.x = door.x - 30;
+    player.y = door.y;
+    player.angle = 0;
+
+    for (let i = 0; i < 30; i += 1) update(world, DT, { ...idle, moveX: speed, aimAngle: 0 });
+    return victim;
+  };
+
+  check('влетевший в дверь сбивает стоящего за ней', slam(1).downed > 0);
+  check('подойти и толкнуть — не считается', slam(0.35).downed === 0);
+}
+
 /* --- F. Производительность шага --- */
 {
   const world = createWorld(CAMPAIGN[0]);

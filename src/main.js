@@ -29,6 +29,7 @@ const ui = {
   kills: $('kills'),
   clock: $('clock'),
   toast: $('toast'),
+  dead: $('dead'),
   veil: $('veil'),
   veilKicker: $('veilKicker'),
   veilTitle: $('veilTitle'),
@@ -56,6 +57,7 @@ const ui = {
 };
 
 const SFX_BY_EVENT = {
+  slam: 'slam',
   shot: 'shot',
   swing: 'swing',
   impact: 'impact',
@@ -174,6 +176,7 @@ function showVeil(config) {
 
 function hideVeil() {
   ui.veil.hidden = true;
+  ui.dead.hidden = true;
   audio.setMenu(false);
 }
 
@@ -233,6 +236,7 @@ function startLevel(next, { silent } = {}) {
   attempts += 1;
   result = null;
   locked = null;
+  ui.dead.hidden = true;
   score = createScore(level, attempts);
   if (!silent) audio.playTrack(level.track || 0);
   updateHud(true);
@@ -253,21 +257,20 @@ function callScreen() {
   });
 }
 
+/*
+ * Смерть.
+ *
+ * Меню здесь было ошибкой: карточка со счётом, попытками и кнопкой
+ * заставляет читать и целиться мышью, а Hotline Miami держит игрока в
+ * потоке именно тем, что между смертью и новой попыткой нет ничего.
+ * Поэтому теперь — красный оттиск, слово «заново» и любая клавиша.
+ *
+ * Музыку при этом не глушим и не начинаем заново: она и есть тот метроном,
+ * по которому игрок продолжает двигаться, пока экран мигает.
+ */
 function deathScreen() {
   scene = 'dead';
-  showVeil({
-    tone: 'dead',
-    kicker: `ПОПЫТКА ${attempts}`,
-    title: 'ТЕБЯ УБИЛИ',
-    text: 'Здесь умирают с одного удара — и ты, и они. Разница только в том, кто ударил первым.',
-    stats: `<span>ВЫРЕЗАНО ${world.kills} ИЗ ${world.total}</span><span>${formatTime(world.time)}</span>`
-      + `<span>СГОРЕЛО ОЧКОВ: ${score.state.score}</span>`,
-    action: 'ЗАНОВО',
-  });
-}
-
-function hasNextFloor() {
-  return !custom && levelIndex + 1 < CAMPAIGN.length;
+  ui.dead.hidden = false;
 }
 
 function clearScreen() {
@@ -452,7 +455,7 @@ function drainEvents() {
       vibrate(12);
     } else if (event.type === 'death') {
       vibrate([40, 30, 90]);
-      deathHold = 0.24;
+      deathHold = 0.14;
     } else if (event.type === 'cleared') {
       setToast('ЭТАЖ ЧИСТ — К ВЫХОДУ', 3);
     } else if (event.type === 'dry') {
@@ -504,7 +507,7 @@ function frame(now) {
     audio.setIntensity(world.total ? alerted / world.total : 0);
 
     if (world.state === 'dead') {
-      deathHold = 0.24;
+      deathHold = 0.14;
       scene = 'dying';
     }
 
@@ -663,6 +666,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* Первое касание экрана разрешает звук: без жеста браузер его не пустит. */
+/* Кадр дышит в такт музыки: подписываемся один раз при старте. */
+audio.onBeat(() => { if (world) world.fx.beat = 1; });
+
 const wake = () => { audio.unlock(); window.removeEventListener('pointerdown', wake); };
 window.addEventListener('pointerdown', wake);
 
