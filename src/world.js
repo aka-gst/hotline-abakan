@@ -20,29 +20,33 @@ export const BODY = 9;
 export const WEAPONS = {
   fists: {
     id: 'fists', name: 'КУЛАКИ', kind: 'melee',
-    reach: 28, arc: 1.9, cooldown: 0.22, lethal: false, noise: 70,
+    reach: 29, arc: 1.9, cooldown: 0.15, lethal: false, noise: 70,
   },
   bat: {
     id: 'bat', name: 'БИТА', kind: 'melee',
-    reach: 38, arc: 2.0, cooldown: 0.27, lethal: true, noise: 110,
+    reach: 40, arc: 2.0, cooldown: 0.18, lethal: true, noise: 110,
   },
   pistol: {
     id: 'pistol', name: 'ПИСТОЛЕТ', kind: 'gun',
-    cooldown: 0.19, clip: 12, speed: 820, spread: 0.03, noise: 460,
+    cooldown: 0.16, clip: 12, speed: 900, spread: 0.03, noise: 460,
   },
 };
 
 /*
- * Темп. Игра про то, что всё решается за секунду, поэтому разгон почти
+ * Темп. Игра про то, что всё решается за секунду, поэтому разгон
  * мгновенный: между нажатием и движением не должно быть ничего, что
- * чувствуется. Враг бежит заметно медленнее игрока — убегать можно, но
- * от пули это не спасает.
+ * чувствуется. Скорость и откат удара выставлены под жанр — бежишь
+ * быстро, бьёшь сразу, ошибаешься один раз.
+ *
+ * Физику маха здесь пробовали и убрали: оружие с инерцией красиво
+ * выглядит, но заставляет ждать, пока рука дойдёт до цели, а вся игра
+ * держится на том, что между решением и трупом нет паузы.
  */
-const PLAYER_SPEED = 252;
-const PLAYER_ACCEL = 3600;
-const ENEMY_WALK = 70;
-const ENEMY_RUN = 152;
-const DOWN_TIME = 2;
+const PLAYER_SPEED = 290;
+const PLAYER_ACCEL = 4600;
+const ENEMY_WALK = 76;
+const ENEMY_RUN = 168;
+const DOWN_TIME = 1.7;
 const BULLET_LIFE = 1.6;
 
 
@@ -393,7 +397,7 @@ function swingMelee(world, attacker, from) {
    * удара наливается белым. Промах не делает ничего из этого.
    */
   if (connected) {
-    world.fx.hitstop = Math.max(world.fx.hitstop, 0.08);
+    world.fx.hitstop = Math.max(world.fx.hitstop, 0.05);
     world.fx.shake = Math.max(world.fx.shake, 7);
     world.fx.punch = 1;
     attacker.swingHit = 0.2;
@@ -404,8 +408,13 @@ function swingMelee(world, attacker, from) {
 export function knockDown(world, enemy, angle) {
   enemy.downed = DOWN_TIME;
   enemy.state = 'down';
-  enemy.vx += Math.cos(angle) * 260;
-  enemy.vy += Math.sin(angle) * 260;
+  /*
+   * Отбрасывает несильно: сбитый должен оставаться под ногами, иначе
+   * связка «сбил — добил» превращается в догонялки, а игра обещает
+   * обратное — что всё решается на месте и мгновенно.
+   */
+  enemy.vx += Math.cos(angle) * 150;
+  enemy.vy += Math.sin(angle) * 150;
   enemy.hitFlash = 0.16;
   spark(world, enemy.x, enemy.y, angle, 1.2, 9, '#ffffff', 150);
   pop(world, enemy.x, enemy.y, 14, '255,255,255');
@@ -439,7 +448,7 @@ export function killEnemy(world, enemy, angle, cause, source = {}) {
     });
   }
 
-  world.fx.hitstop = Math.max(world.fx.hitstop, 0.045);
+  world.fx.hitstop = Math.max(world.fx.hitstop, 0.035);
   world.fx.flash = Math.max(world.fx.flash, 0.25);
 
   /*
@@ -467,7 +476,7 @@ export function killPlayer(world, angle) {
   player.alive = false;
   world.state = 'dead';
   bleed(world, player.x, player.y, angle, 240);
-  world.fx.hitstop = Math.max(world.fx.hitstop, 0.16);
+  world.fx.hitstop = Math.max(world.fx.hitstop, 0.14);
   world.fx.shake = 11;
   world.events.push({ type: 'death' });
 }

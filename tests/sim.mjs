@@ -70,6 +70,10 @@ function nearest(world) {
     `downed=${victim.downed.toFixed(2)} alive=${victim.alive}`);
 
   run(world, 0.4);
+  /* Подходим вплотную: проверяем правило добивания, а не длину скольжения. */
+  player.x = victim.x - 20;
+  player.y = victim.y;
+  player.cooldown = 0;
   update(world, DT, { ...idle, attack: true });
   check('добивание лежачего засчитано', !victim.alive && world.kills === 1,
     `kills=${world.kills}`);

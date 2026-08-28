@@ -452,7 +452,7 @@ function drainEvents() {
       vibrate(12);
     } else if (event.type === 'death') {
       vibrate([40, 30, 90]);
-      deathHold = 0.32;
+      deathHold = 0.24;
     } else if (event.type === 'cleared') {
       setToast('ЭТАЖ ЧИСТ — К ВЫХОДУ', 3);
     } else if (event.type === 'dry') {
@@ -504,7 +504,7 @@ function frame(now) {
     audio.setIntensity(world.total ? alerted / world.total : 0);
 
     if (world.state === 'dead') {
-      deathHold = 0.32;
+      deathHold = 0.24;
       scene = 'dying';
     }
 
@@ -534,9 +534,9 @@ function frame(now) {
     /* Камера смотрит чуть вперёд по прицелу и догоняет быстро: на этой
        скорости мягкое слежение отстаёт и игрок упирается в край кадра. */
     const player = world.player;
-    const lead = 52;
-    view.x += (player.x + Math.cos(player.angle) * lead - view.x) * Math.min(1, dt * 11);
-    view.y += (player.y + Math.sin(player.angle) * lead - view.y) * Math.min(1, dt * 11);
+    const lead = 60;
+    view.x += (player.x + Math.cos(player.angle) * lead - view.x) * Math.min(1, dt * 13);
+    view.y += (player.y + Math.sin(player.angle) * lead - view.y) * Math.min(1, dt * 13);
     lastView = renderer.draw(world, view);
 
     /*
