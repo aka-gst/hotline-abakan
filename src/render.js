@@ -574,60 +574,14 @@ export function createRenderer(canvas) {
     }
   }
 
-  /*
-   * Оружие и его след. Яркость и толщина растут со скоростью кончика:
-   * это единственная подсказка о том, убивает мах прямо сейчас или нет.
-   */
-  function drawArm(g, world) {
-    const player = world.player;
-    const weapon = WEAPONS[player.weapon];
-    if (!player.tip) return;
-
-    const hot = Math.min(1, (player.swingSpeed || 0) / 700);
-    const trail = player.trail || [];
-
-    if (trail.length > 1) {
-      g.beginPath();
-      g.moveTo(trail[0].x, trail[0].y);
-      for (const point of trail) g.lineTo(point.x, point.y);
-      g.strokeStyle = `rgba(255,255,255,${0.05 + hot * 0.45})`;
-      g.lineWidth = 2 + hot * 4;
-      g.lineCap = 'round';
-      g.stroke();
-    }
-
-    if (weapon.kind !== 'melee') {
-      g.save();
-      g.translate(player.x, player.y);
-      g.rotate(player.angle);
-      drawWeapon(g, player.weapon, 0, 0);
-      g.restore();
-      return;
-    }
-
-    g.strokeStyle = player.weapon === 'bat' ? '#c9a06a' : '#f6e6ff';
-    g.lineWidth = player.weapon === 'bat' ? 5 : 3;
-    g.beginPath();
-    g.moveTo(player.x + Math.cos(player.arm) * 6, player.y + Math.sin(player.arm) * 6);
-    g.lineTo(player.tip.x, player.tip.y);
-    g.stroke();
-
-    g.fillStyle = hot > 0.5 ? '#ffffff' : '#f0d6a8';
-    g.beginPath();
-    g.arc(player.tip.x, player.tip.y, player.weapon === 'bat' ? 4 : 2.5, 0, 6.29);
-    g.fill();
-  }
-
   function drawPlayer(g, world) {
     const player = world.player;
     if (!player.alive) return;
 
-    /*
-     * Оружие рисуется отдельно от тела и по своему углу: в этой игре оно
-     * живёт с задержкой и является главным, на что смотрит игрок.
-     */
-    body(g, player.x, player.y, player.angle, PALETTE.player, {});
-    drawArm(g, world);
+    body(g, player.x, player.y, player.angle, PALETTE.player, {
+      weapon: player.weapon,
+      swing: player.swing,
+    });
 
     /*
      * Дуга удара прочерчивается по ходу замаха, а не висит целиком: так
