@@ -13,7 +13,7 @@
  */
 
 import { TILE } from './level.js';
-import { TILE_SIZE, BODY, WEAPONS } from './world.js';
+import { TILE_SIZE, BODY, WEAPONS, backstabReady } from './world.js';
 
 /*
  * Пол светлее стен, а не наоборот. Первый вариант палитры был собран
@@ -520,6 +520,68 @@ export function createRenderer(canvas) {
     }
   }
 
+  /*
+   * Лежащее тело.
+   *
+   * Раньше сбитый рисовался тем же кружком, только повёрнутым, и понять,
+   * что человек без сознания, было нельзя — он выглядел как стоящий, но
+   * почему-то боком. Теперь тело вытянуто вдоль удара, голова смещена к
+   * одному концу, силуэт плоский и тусклый. Дуга под телом показывает,
+   * сколько ему осталось лежать: добить или бежать дальше — решение
+   * игрока, и у него должны быть данные.
+   */
+  function prone(g, enemy, palette) {
+    const angle = enemy.prone === undefined ? enemy.angle : enemy.prone;
+
+    g.save();
+    g.translate(enemy.x, enemy.y);
+
+    g.fillStyle = 'rgba(0,0,0,.45)';
+    g.beginPath();
+    g.ellipse(3, 4, BODY * 1.9, BODY * 0.8, angle, 0, 6.29);
+    g.fill();
+
+    g.rotate(angle);
+
+    /* Туловище — вытянутая капсула по оси падения. */
+    g.fillStyle = palette.shirt;
+    g.beginPath();
+    g.ellipse(0, 0, BODY * 1.85, BODY * 0.72, 0, 0, 6.29);
+    g.fill();
+
+    g.fillStyle = palette.body;
+    g.beginPath();
+    g.ellipse(-2, 0, BODY * 1.5, BODY * 0.55, 0, 0, 6.29);
+    g.fill();
+
+    /* Голова у дальнего конца, руки в стороны — поза читается сразу. */
+    g.fillStyle = palette.head;
+    g.beginPath();
+    g.ellipse(BODY * 1.55, 0, 5, 4.4, 0, 0, 6.29);
+    g.fill();
+
+    g.strokeStyle = palette.shirt;
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(0, -2);
+    g.lineTo(-6, -BODY);
+    g.moveTo(0, 2);
+    g.lineTo(-5, BODY);
+    g.stroke();
+
+    g.restore();
+
+    /* Сколько осталось лежать. */
+    const left = enemy.downedFor ? enemy.downed / enemy.downedFor : 0;
+    if (left > 0) {
+      g.strokeStyle = 'rgba(255,224,107,.75)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(enemy.x, enemy.y, BODY * 2.2, -Math.PI / 2, -Math.PI / 2 + left * 6.28);
+      g.stroke();
+    }
+  }
+
   function drawEnemies(g, world) {
     for (const enemy of world.enemies) {
       if (!enemy.alive) continue;
@@ -527,10 +589,7 @@ export function createRenderer(canvas) {
       const palette = PALETTE[enemy.kind] || PALETTE.thug;
 
       if (enemy.downed > 0) {
-        g.save();
-        g.globalAlpha = 0.85;
-        body(g, enemy.x, enemy.y, enemy.angle + 1.4, palette, { lean: 4 });
-        g.restore();
+        prone(g, enemy, palette);
 
         if (enemy.hitFlash > 0) {
           g.save();
@@ -541,9 +600,6 @@ export function createRenderer(canvas) {
           g.fill();
           g.restore();
         }
-        g.fillStyle = '#ffe06b';
-        g.font = 'bold 9px ui-monospace, monospace';
-        g.fillText('!', enemy.x - 2, enemy.y - 15);
         continue;
       }
 
@@ -570,6 +626,27 @@ export function createRenderer(canvas) {
         g.lineWidth = 2;
         g.beginPath();
         g.arc(enemy.x, enemy.y, BODY + 6, 0, 6.29);
+        g.stroke();
+      }
+
+      /*
+       * Метка «можно тихо». Без неё удар со спины остаётся тайным знанием
+       * для того, кто читал код: игрок должен видеть момент, а не угадывать
+       * его по углу поворота чужой головы.
+       */
+      if (backstabReady(world, enemy)) {
+        const pulse = 0.55 + Math.sin(world.time * 12) * 0.35;
+        g.strokeStyle = `rgba(255,255,255,${pulse})`;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(enemy.x, enemy.y, BODY + 5, 0, 6.29);
+        g.stroke();
+
+        g.beginPath();
+        g.moveTo(enemy.x - 4, enemy.y - BODY - 10);
+        g.lineTo(enemy.x + 4, enemy.y - BODY - 4);
+        g.moveTo(enemy.x + 4, enemy.y - BODY - 10);
+        g.lineTo(enemy.x - 4, enemy.y - BODY - 4);
         g.stroke();
       }
 

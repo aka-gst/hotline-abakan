@@ -161,6 +161,8 @@ export function createAudio() {
     },
     knock() { tone('sine', 180, 50, 0.18, 0.5); noise(0.1, 'lowpass', 500, 0.3); },
     kill() { noise(0.28, 'lowpass', 1200, 0.5); tone('sawtooth', 140, 40, 0.3, 0.35); },
+    /* Тихое убийство: короткий влажный срез вместо грохота. */
+    backstab() { noise(0.16, 'bandpass', 2600, 0.3, 2); tone('sine', 420, 90, 0.18, 0.22); },
     death() { tone('sawtooth', 420, 40, 0.9, 0.5); noise(0.6, 'lowpass', 700, 0.4); },
     pickup() { tone('square', 620, 940, 0.09, 0.22); },
     dry() { noise(0.05, 'highpass', 3000, 0.25); },

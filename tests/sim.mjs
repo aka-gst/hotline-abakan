@@ -64,6 +64,8 @@ function nearest(world) {
   player.x = victim.x - 20;
   player.y = victim.y;
   player.angle = 0;
+  /* Враг смотрит на игрока: иначе это удар со спины, а он убивает сразу. */
+  victim.angle = Math.PI;
 
   update(world, DT, { ...idle, attack: true });
   check('кулаком враг сбит с ног, но жив', victim.downed > 0 && victim.alive,
@@ -191,6 +193,7 @@ function nearest(world) {
     player.x = victim.x - 20;
     player.y = victim.y;
     player.angle = 0;
+    victim.angle = Math.PI;
     step({ ...idle, attack: true });
   };
 
@@ -219,6 +222,7 @@ function nearest(world) {
   player.x = victim.x - 18;
   player.y = victim.y;
   player.angle = 0;
+  victim.angle = Math.PI;      /* лицом к игроку — не со спины */
   step({ ...idle, attack: true });
   check('кулак не убивает, а сбивает', victim.alive && victim.downed > 0);
 
@@ -358,6 +362,57 @@ function nearest(world) {
 
   check('влетевший в дверь сбивает стоящего за ней', slam(1).downed > 0);
   check('подойти и толкнуть — не считается', slam(0.35).downed === 0);
+}
+
+/* --- H. Удар со спины --- */
+{
+  const setup = (facing) => {
+    const world = createWorld(CAMPAIGN[0]);
+    const victim = world.enemies[0];
+    const player = world.player;
+
+    player.weapon = 'fists';
+    player.x = victim.x - 20;
+    player.y = victim.y;
+    player.angle = 0;
+    player.cooldown = 0;
+
+    victim.state = 'idle';
+    victim.angle = facing;
+
+    update(world, DT, { ...idle, attack: true });
+    return { world, victim };
+  };
+
+  /* Стоит спиной и не знает про игрока — умирает от кулака и сразу. */
+  const back = setup(0);
+  check('кулак со спины убивает', !back.victim.alive);
+  check('и делает это тихо', back.world.events.some((e) => e.type === 'kill' && e.silent));
+
+  /* Смотрит на игрока — обычный кулак только сбивает. */
+  const face = setup(Math.PI);
+  check('в лицо кулак по-прежнему только сбивает',
+    face.victim.alive && face.victim.downed > 0);
+
+  /* Заметивший игрока спиной уже не считается. */
+  const alerted = createWorld(CAMPAIGN[0]);
+  const chaser = alerted.enemies[0];
+  const hunter = alerted.player;
+  hunter.weapon = 'fists';
+  hunter.x = chaser.x - 20;
+  hunter.y = chaser.y;
+  hunter.angle = 0;
+  hunter.cooldown = 0;
+  chaser.angle = 0;
+  chaser.state = 'chase';
+  update(alerted, DT, { ...idle, attack: true });
+  check('бегущего на тебя со спины не зарежешь', chaser.alive && chaser.downed > 0);
+
+  /* Тихий удар почти не расходится: соседей не поднимает. */
+  const quiet = setup(0);
+  run(quiet.world, 1);
+  check('тихое убийство не поднимает этаж',
+    quiet.world.enemies.filter((e) => e.alive && e.state !== 'idle').length === 0);
 }
 
 /* --- F. Производительность шага --- */

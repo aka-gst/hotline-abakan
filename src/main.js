@@ -58,6 +58,7 @@ const ui = {
 
 const SFX_BY_EVENT = {
   slam: 'slam',
+  /* Убийство со спины звучит своим звуком — он подставляется в drainEvents. */
   shot: 'shot',
   swing: 'swing',
   impact: 'impact',
@@ -452,6 +453,7 @@ function drainEvents() {
     if (name) audio.sfx(name);
 
     if (event.type === 'kill') {
+      if (event.silent) audio.sfx('backstab');
       vibrate(12);
     } else if (event.type === 'death') {
       vibrate([40, 30, 90]);

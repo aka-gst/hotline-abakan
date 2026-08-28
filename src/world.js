@@ -337,12 +337,48 @@ function fireGun(world, shooter, from) {
  * Удар — не снаряд, а мгновенная проверка сектора. Так он честно
  * попадает по тому, кого игрок видел на экране в момент нажатия.
  */
+/*
+ * Удар со спины.
+ *
+ * Тот, кто не знает про игрока и стоит к нему спиной, умирает от чего
+ * угодно — даже от кулака, который иначе только сбивает с ног. И умирает
+ * тихо: шум такого удара почти не расходится, поэтому этаж можно
+ * разбирать по одному, пока никто не обернулся.
+ *
+ * Это второй темп внутри той же игры: красться и срываться в резню —
+ * разные скорости, и выбирать между ними должен игрок, а не уровень.
+ */
+export function fromBehind(world, attacker, target) {
+  if (!target || target === world.player || !target.alive) return false;
+  if (target.downed > 0 || target.state === 'chase') return false;
+
+  const toAttacker = Math.atan2(attacker.y - target.y, attacker.x - target.x);
+  return Math.abs(angleDelta(target.angle, toAttacker)) > 1.9;
+}
+
+
+/* Готово ли убийство со спины прямо сейчас — для метки на экране. */
+export function backstabReady(world, enemy) {
+  const player = world.player;
+  if (!player.alive || !enemy.alive) return false;
+
+  const weapon = WEAPONS[player.weapon];
+  if (weapon.kind !== 'melee') return false;
+
+  const dx = enemy.x - player.x;
+  const dy = enemy.y - player.y;
+  if (Math.hypot(dx, dy) > weapon.reach + BODY) return false;
+  if (Math.abs(angleDelta(player.angle, Math.atan2(dy, dx))) > weapon.arc / 2) return false;
+  if (!hasSight(world, player.x, player.y, enemy.x, enemy.y)) return false;
+
+  return fromBehind(world, player, enemy);
+}
+
+
 function swingMelee(world, attacker, from) {
   const weapon = WEAPONS[attacker.weapon];
   attacker.cooldown = weapon.cooldown;
   attacker.swing = 0.16;
-  emitNoise(world, attacker.x, attacker.y, weapon.noise, from);
-  world.events.push({ type: 'swing', from, lethal: weapon.lethal });
 
   const candidates = from === 'player'
     ? world.enemies.filter((e) => e.alive)
@@ -373,18 +409,27 @@ function swingMelee(world, attacker, from) {
   }
 
   const connected = Boolean(target);
+  const silent = from === 'player' && fromBehind(world, attacker, target);
+
+  /*
+   * Шум зависит от того, вышло ли тихо. Тихий удар почти не расходится —
+   * на этом и держится вторая скорость игры.
+   */
+  emitNoise(world, attacker.x, attacker.y, silent ? 55 : weapon.noise, from);
+  world.events.push({ type: 'swing', from, lethal: weapon.lethal, silent });
 
   if (target) {
     const toTarget = Math.atan2(target.y - attacker.y, target.x - attacker.x);
 
     if (target === world.player) {
       killPlayer(world, toTarget);
-    } else if (weapon.lethal || target.downed > 0) {
-      /* Лежачего добивают даже кулаком — иначе сбитый враг бессмысленен. */
-      killEnemy(world, target, toTarget, 'melee', {
+    } else if (silent || weapon.lethal || target.downed > 0) {
+      /* Со спины и лежачего добивают даже кулаком. */
+      killEnemy(world, target, toTarget, silent ? 'backstab' : 'melee', {
         by: from,
         weapon: attacker.weapon,
         execution: target.downed > 0,
+        silent,
       });
     } else {
       knockDown(world, target, toTarget);
@@ -407,6 +452,9 @@ function swingMelee(world, attacker, from) {
 
 export function knockDown(world, enemy, angle) {
   enemy.downed = DOWN_TIME;
+  enemy.downedFor = DOWN_TIME;
+  /* Падает по направлению удара — по этой оси его и будет видно лежащим. */
+  enemy.prone = angle;
   enemy.state = 'down';
   /*
    * Отбрасывает несильно: сбитый должен оставаться под ногами, иначе
@@ -462,6 +510,7 @@ export function killEnemy(world, enemy, angle, cause, source = {}) {
     by: source.by || 'player',
     weapon: source.weapon || null,
     execution: Boolean(source.execution),
+    silent: Boolean(source.silent),
   });
 
   if (world.kills >= world.total && !world.exitOpen) {
