@@ -119,6 +119,26 @@ export function inRhythm(world) {
   return beatOff(world) <= BEAT_WINDOW;
 }
 
+/*
+ * Сколько осталось до следующей доли и попадаем ли мы в окно прямо сейчас.
+ *
+ * Кольцо, расходящееся после доли, показывает прошлое: увидел — значит,
+ * уже опоздал. Чтобы попасть в такт, нужно видеть будущее, и потому
+ * отсюда отдаётся время ДО следующей доли: кольцо сжимается и касается
+ * плеч ровно тогда, когда надо бить.
+ */
+export function beatAhead(world) {
+  const heard = world.beatAt !== undefined && world.time - world.beatAt < BEAT_PERIOD * 3;
+  const since = heard ? world.time - world.beatAt : world.time;
+  const phase = ((since % BEAT_PERIOD) + BEAT_PERIOD) % BEAT_PERIOD;
+  return {
+    toNext: BEAT_PERIOD - phase,
+    since: phase,
+    window: BEAT_WINDOW,
+    inWindow: Math.min(phase, BEAT_PERIOD - phase) <= BEAT_WINDOW,
+  };
+}
+
 export const WEAPONS = {
   fists: {
     id: 'fists', name: 'КУЛАКИ', kind: 'melee',

@@ -595,13 +595,12 @@ function updateHud(force) {
   /* Иконка того, что в руках. Оружие берём из тех же файлов, которыми оно
      нарисовано на полу, — тогда поднятое с пола и показанное в углу
      совпадают, и узнавать приходится один раз. */
-  const drawn = { fists: 'assets/ui/fists.png', bat: 'assets/items/bat.png', pistol: 'assets/items/pistol.png' };
-  const icon = drawn[player.weapon];
+  const icon = player.weapon === 'fists'
+    ? 'assets/ui/fists.png'
+    : `assets/items/${player.weapon}.png`;
   if (ui.weaponIcon) {
-    /* Оружие, для которого картинки ещё не прислали, показывается одним
-       названием: пустой квадрат хуже, чем его отсутствие. */
-    ui.weaponIcon.hidden = !icon;
-    if (icon && !ui.weaponIcon.src.endsWith(icon)) ui.weaponIcon.src = icon;
+    ui.weaponIcon.hidden = false;
+    if (!ui.weaponIcon.src.endsWith(icon)) ui.weaponIcon.src = icon;
   }
 
   if (weapon.kind === 'gun') {

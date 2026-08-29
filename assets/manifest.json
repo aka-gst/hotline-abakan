@@ -309,7 +309,11 @@
   },
   "items": {
     "bat": "items/bat.png",
-    "pistol": "items/pistol.png"
+    "pistol": "items/pistol.png",
+    "knife": "items/knife.png",
+    "pipe": "items/pipe.png",
+    "bottle": "items/bottle.png",
+    "shotgun": "items/shotgun.png"
   },
   "moves": {
     "hand": {

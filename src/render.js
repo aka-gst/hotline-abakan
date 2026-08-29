@@ -14,7 +14,7 @@
 
 import { TILE } from './level.js';
 import { pickFrame } from './assets.js';
-import { TILE_SIZE, BODY, WEAPONS, MOVES, BARE_HP, backstabReady } from './world.js';
+import { TILE_SIZE, BODY, WEAPONS, MOVES, BARE_HP, BEAT_PERIOD, backstabReady, beatAhead } from './world.js';
 
 /*
  * Пол светлее стен, а не наоборот. Первый вариант палитры был собран
@@ -402,6 +402,31 @@ export function createRenderer(canvas, assets = null) {
         sheetSprite(g, art, frame, x, y, angle, SIZE);
       } else {
         sprite(g, art.image, x, y, angle, SIZE);
+      }
+
+      /*
+       * Оружие в руке.
+       *
+       * Листы анимации есть только на кулаки, биту и пистолет; с ножом,
+       * трубой, бутылкой и обрезом персонаж рисовался безоружным, и на
+       * вопрос «что у меня в руках» отвечали только показания в углу.
+       * Теперь всё, чего нет на листе, дорисовывается поверх — и в
+       * момент удара становится ярче и длиннее, потому что именно тогда
+       * на него и смотрят.
+       */
+      const ON_SHEET = ['fists', 'bat', 'pistol'];
+      if (art.rows && opts.weapon && !ON_SHEET.includes(opts.weapon)) {
+        g.save();
+        g.translate(x, y);
+        g.rotate(angle);
+        const hit = (opts.swing || 0) > 0;
+        if (hit) {
+          g.shadowColor = '#ffffff';
+          g.shadowBlur = 8;
+          g.scale(1.25, 1.25);
+        }
+        drawWeapon(g, opts.weapon, opts.swing || 0, opts.windup || 0);
+        g.restore();
       }
 
       if (!art.rows && opts.weapon && opts.weapon !== 'fists') {
@@ -1124,19 +1149,43 @@ export function createRenderer(canvas, assets = null) {
     /*
      * Метроном вокруг игрока.
      *
-     * Правило про удар в долю бесполезно, если долю не видно: на слух её
-     * ловит не всякий, а со звуком, выключенным в метро, — никто. Кольцо
-     * расходится от игрока на каждую долю и гаснет ровно за то время,
-     * пока удар ещё считается попавшим в неё. Промахнуться мимо ритма,
-     * глядя на кольцо, уже трудно.
+     * Кольцо, расходившееся после доли, показывало прошлое: пока его
+     * увидишь, бить уже поздно. Теперь оно сжимается — приходит из
+     * темноты и садится на плечи ровно в долю. Бить надо, когда оно
+     * коснулось: это читается без объяснений, как прицел в ритм-играх.
+     *
+     * В окне попадания кольцо загорается кислотным и толстеет, за окном
+     * остаётся тусклой серой ниткой. Промахнуться мимо такта, глядя на
+     * него, уже трудно.
      */
-    if (world.fx.beat > 0.02) {
-      g.save();
+    const beat = beatAhead(world);
+    const reach = BODY + 30;
+    const near = BODY + 5;
+    const radius = near + (beat.toNext / BEAT_PERIOD) * (reach - near);
+
+    g.save();
+    if (beat.inWindow) {
       g.strokeStyle = '#76ff9f';
-      g.globalAlpha = world.fx.beat * 0.5;
+      g.globalAlpha = 0.95;
+      g.lineWidth = 3;
+    } else {
+      g.strokeStyle = '#9a8fb5';
+      g.globalAlpha = 0.5;
+      g.lineWidth = 1.5;
+    }
+    g.beginPath();
+    g.arc(player.x, player.y, Math.min(reach, Math.max(near, radius)), 0, 6.29);
+    g.stroke();
+    g.restore();
+
+    /* Вспышка в самый момент доли: короткая, чтобы её было видно краем глаза. */
+    if (world.fx.beat > 0.55) {
+      g.save();
+      g.globalAlpha = (world.fx.beat - 0.55) * 1.6;
+      g.strokeStyle = '#ffffff';
       g.lineWidth = 2;
       g.beginPath();
-      g.arc(player.x, player.y, BODY + 4 + (1 - world.fx.beat) * 16, 0, 6.29);
+      g.arc(player.x, player.y, near, 0, 6.29);
       g.stroke();
       g.restore();
     }
