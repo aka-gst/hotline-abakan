@@ -35,6 +35,19 @@ function run(world, seconds, intentFor) {
   }
 }
 
+/*
+ * Безоружный удар стал двухфазным: нажатие начинает замах, попадание
+ * случается через startup приёма. Поэтому нажать мало — надо прокрутить
+ * кадры до самого удара.
+ */
+function bare(world, moveId = 'hand', frames = 26) {
+  const angle = world.player.angle;
+  update(world, DT, { ...idle, aimAngle: angle, attack: true, move: moveId });
+  for (let i = 0; i < frames; i += 1) {
+    update(world, DT, { ...idle, aimAngle: angle });
+  }
+}
+
 function nearest(world) {
   let best = null, dist = Infinity;
   for (const enemy of world.enemies) {
@@ -68,7 +81,7 @@ function nearest(world) {
   /* Враг смотрит на игрока: иначе это удар со спины, а он убивает сразу. */
   victim.angle = Math.PI;
 
-  update(world, DT, { ...idle, attack: true });
+  bare(world);
   check('кулаком враг сбит с ног, но жив', victim.downed > 0 && victim.alive,
     `downed=${victim.downed.toFixed(2)} alive=${victim.alive}`);
 
@@ -77,7 +90,7 @@ function nearest(world) {
   player.x = victim.x - 20;
   player.y = victim.y;
   player.cooldown = 0;
-  update(world, DT, { ...idle, attack: true });
+  bare(world);
   check('добивание лежачего засчитано', !victim.alive && world.kills === 1,
     `kills=${world.kills}`);
   check('после смерти на полу осталось оружие', world.pickups.some((p) => p.weapon === 'bat'));
@@ -239,7 +252,8 @@ function nearest(world) {
   fighter.y = victim.y;
   fighter.angle = 0;
   victim.angle = Math.PI;      /* лицом к игроку — не со спины */
-  arenaStep({ ...idle, attack: true });
+  arenaStep({ ...idle, attack: true, move: 'hand' });
+  for (let i = 0; i < 10; i += 1) arenaStep();
   check('кулак не убивает, а сбивает', victim.alive && victim.downed > 0);
 
   const beforeExecution = arenaScore.state.score;
@@ -247,7 +261,8 @@ function nearest(world) {
   fighter.cooldown = 0;
   fighter.x = victim.x - 18;
   fighter.y = victim.y;
-  arenaStep({ ...idle, attack: true });
+  arenaStep({ ...idle, attack: true, move: 'hand' });
+  for (let i = 0; i < 10; i += 1) arenaStep();
   const gained = arenaScore.state.score - beforeExecution;
   check('добивание лежачего дороже удара', gained === 150, `получено ${gained}`);
   check('казнь посчитана отдельно', arenaScore.state.executions === 1);
@@ -398,14 +413,20 @@ function nearest(world) {
     victim.state = 'idle';
     victim.angle = facing;
 
-    update(world, DT, { ...idle, attack: true });
-    return { world, victim };
+    const events = [];
+    update(world, DT, { ...idle, attack: true, move: 'hand' });
+    events.push(...world.events);
+    for (let i = 0; i < 10; i += 1) {
+      update(world, DT, idle);
+      events.push(...world.events);
+    }
+    return { world, victim, events };
   };
 
   /* Стоит спиной и не знает про игрока — умирает от кулака и сразу. */
   const back = setup(0);
   check('кулак со спины убивает', !back.victim.alive);
-  check('и делает это тихо', back.world.events.some((e) => e.type === 'kill' && e.silent));
+  check('и делает это тихо', back.events.some((e) => e.type === 'kill' && e.silent));
 
   /* Смотрит на игрока — обычный кулак только сбивает. */
   const face = setup(Math.PI);
@@ -423,7 +444,7 @@ function nearest(world) {
   hunter.cooldown = 0;
   chaser.angle = 0;
   chaser.state = 'chase';
-  update(alerted, DT, { ...idle, attack: true });
+  bare(alerted);
   check('бегущего на тебя со спины не зарежешь', chaser.alive && chaser.downed > 0);
 
   /* Тихий удар почти не расходится: соседей не поднимает. */
@@ -452,13 +473,45 @@ function nearest(world) {
     player.y = enemy.y;
     player.angle = 0;
 
-    enemy.state = 'chase';
+    /*
+     * Противник в этой проверке — манекен с поднятым приёмом: в погоне он
+     * бьёт сам и своим случайным выбором превращает замер в лотерею.
+     */
+    enemy.state = 'idle';
+    enemy.cooldown = 99;
     enemy.angle = Math.PI;           /* лицом к игроку: не удар со спины */
+    enemy.vx = 0;
+    enemy.vy = 0;
+    /* Приём противника должен быть живым замахом, а не воспоминанием:
+       отбивает только тот, кто сам сейчас замахивается или держит стойку. */
     enemy.move = enemyMove;
-    enemy.moveLeft = 0.3;
+    enemy.moveStart = 0.25;
+    enemy.moveLeft = 0.5;
+
+    const events = [];
+    let cooldownAtHit = 0;
+    let pushAtHit = 0;
 
     update(world, DT, { ...idle, aimAngle: 0, attack: true, move: playerMove });
-    return { world, enemy, player };
+    events.push(...world.events);
+
+    /* Прокручиваем до попадания: у броска замах длиннее всех. Снимаем
+       показания в тот кадр, когда размен состоялся, — потом скорость
+       угасает, а откат истекает, и мерить уже нечего. */
+    for (let i = 0; i < 26; i += 1) {
+      /* Держим его приём живым и не даём ИИ подменить выбор. */
+      enemy.move = enemyMove;
+      enemy.moveStart = Math.max(enemy.moveStart, 0.25);
+      enemy.moveLeft = Math.max(enemy.moveLeft, 0.3);
+      update(world, DT, { ...idle, aimAngle: 0 });
+      events.push(...world.events);
+      if (world.events.some((e) => e.type === 'clash' || e.type === 'parry')) {
+        cooldownAtHit = player.cooldown;
+        pushAtHit = Math.abs(enemy.vx) + Math.abs(player.vx);
+      }
+    }
+
+    return { world, enemy, player, events, cooldownAtHit, pushAtHit };
   };
 
   check('на этаже есть безоружный боец',
@@ -467,7 +520,8 @@ function nearest(world) {
   const same = duel('kick', 'kick');
   check('приём в приём — никому ничего', same.enemy.hp === BARE_HP && same.player.hp === BARE_HP,
     `у врага ${same.enemy.hp}, у игрока ${same.player.hp}`);
-  check('и обоих отбрасывает', Math.abs(same.enemy.vx) > 50);
+  check('и обоих отбрасывает', same.pushAtHit > 200, `суммарный разлёт ${same.pushAtHit | 0}`);
+  check('и об этом сказано событием', same.events.some((e) => e.type === 'clash'));
 
   const win = duel('hand', 'kick');
   check('рука бьёт ногу', win.enemy.hp === BARE_HP - 1, `осталось ${win.enemy.hp}`);
@@ -481,10 +535,10 @@ function nearest(world) {
   check('перебитый приём никого не ранит',
     lose.player.hp === BARE_HP && lose.enemy.hp === BARE_HP,
     `игрок ${lose.player.hp}, враг ${lose.enemy.hp}`);
-  check('но рука занята дольше обычного', lose.player.cooldown > 0.3,
-    `откат ${lose.player.cooldown.toFixed(2)}`);
+  check('но рука занята дольше обычного', lose.cooldownAtHit > 0.3,
+    `откат ${lose.cooldownAtHit.toFixed(2)}`);
   check('и об этом сказано событием',
-    lose.world.events.some((e) => e.type === 'parry'));
+    lose.events.some((e) => e.type === 'parry'));
 
   /*
    * Три попадания — и боец готов. Держим его в покое и лицом к игроку:
@@ -498,18 +552,36 @@ function nearest(world) {
 
   for (let i = 0; i < 3; i += 1) {
     enemy.state = 'idle';
+    enemy.cooldown = 99;
     enemy.angle = Math.PI;
     enemy.move = null;
     enemy.nextMove = null;
     enemy.stagger = 0;
+    enemy.vx = 0;
+    enemy.vy = 0;
     player.cooldown = 0;
-    player.x = enemy.x - 22;
+    player.x = enemy.x - 20;
     player.y = enemy.y;
     player.angle = 0;
+
+    /*
+     * Стойку здесь снимаем принудительно: проверяется правило «три
+     * прошедших удара кладут безоружного», а не умение пробить прикрытие.
+     * С живой стойкой это была бы проверка везения — она меняется прямо
+     * во время замаха.
+     */
+    enemy.guard = null;
     update(world, DT, { ...idle, aimAngle: 0, attack: true, move: 'hand' });
-    for (let k = 0; k < 20; k += 1) update(world, DT, idle);
+    for (let k = 0; k < 22; k += 1) {
+      enemy.guard = null;
+      enemy.vx = 0;
+      enemy.vy = 0;
+      update(world, DT, { ...idle, aimAngle: 0 });
+    }
   }
-  check('три попадания кладут безоружного', !enemy.alive);
+
+  check('три прошедших удара кладут безоружного', !enemy.alive,
+    `осталось ${enemy.hp}`);
 
   /* А с битой в руках — тот же боец с одного удара. */
   const armed = createWorld(CAMPAIGN[0]);
@@ -523,6 +595,57 @@ function nearest(world) {
   target.angle = Math.PI;
   update(armed, DT, { ...idle, aimAngle: 0, attack: true });
   check('бита кладёт его с одного удара', !target.alive);
+}
+
+/* --- J. Что выгоднее в рукопашной --- */
+{
+  /*
+   * Ради этой проверки система и переделывалась трижды. Она отвечает на
+   * единственный вопрос: вознаграждает ли рукопашная чтение противника
+   * или в неё можно молотить вслепую.
+   *
+   * История измерений: сначала защищал любой недавний приём — «всегда
+   * бросок» брал 40 из 40; потом защищал только замах — быстрая рука
+   * брала 38 из 40; теперь безоружный держит стойку, и выигрывает тот,
+   * кто ждёт чужого замаха и отвечает по кругу.
+   */
+  const COUNTER = { hand: 'grab', kick: 'hand', grab: 'kick' };
+
+  const duelOut = (plan, runs = 30) => {
+    let wins = 0;
+    for (let i = 0; i < runs; i += 1) {
+      const world = createWorld(CAMPAIGN[0]);
+      const player = world.player;
+      const enemy = world.enemies.find((e) => !e.weapon);
+      enemy.x = player.x + 26;
+      enemy.y = player.y;
+      enemy.state = 'chase';
+
+      let t = 0;
+      while (t < 25 && player.alive && enemy.alive) {
+        const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+        const move = plan(enemy);
+        update(world, DT, {
+          ...idle,
+          aimAngle: angle,
+          attack: Boolean(move) && player.cooldown <= 0,
+          move: move || 'hand',
+        });
+        t += DT;
+      }
+      if (!enemy.alive) wins += 1;
+    }
+    return wins;
+  };
+
+  const blind = duelOut(() => 'hand');
+  const punish = duelOut((e) => (e.moveStart > 0 ? COUNTER[e.move] : null));
+  check('чтение замаха выгоднее слепого напора', punish > blind + 3,
+    `по кругу ${punish}/30 против ${blind}/30 вслепую`);
+
+  const intoGuard = duelOut((e) => (e.moveStart > 0 ? COUNTER[e.move] : (e.guard ? COUNTER[e.guard] : 'hand')));
+  check('бить в стойку — не тактика', intoGuard <= punish,
+    `в стойку ${intoGuard}/30 против ${punish}/30 по замаху`);
 }
 
 /* --- F. Производительность шага --- */

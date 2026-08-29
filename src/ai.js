@@ -241,12 +241,33 @@ export function thinkEnemy(world, enemy, dt, speed) {
        * замах, приём уже виден над головой. Без этого размен превращается
        * в лотерею — игроку нечего читать.
        */
-      if (!weapon && !enemy.nextMove) {
+      if (!weapon && (!enemy.nextMove || enemy.moveStart <= 0)) {
         enemy.nextMove = MOVE_ORDER[Math.floor(Math.random() * MOVE_ORDER.length)];
       }
 
       const move = weapon ? null : MOVES[enemy.nextMove];
       const reach = (weapon ? weapon.reach : move.reach) + BODY - 6;
+
+      /*
+       * Стойка. Безоружный в пределах удара всегда чем-то прикрыт и
+       * меняет прикрытие раз в полсекунды. Без этого он стоит с
+       * опущенными руками, и по нему выгодно молотить самым быстрым
+       * приёмом не глядя — прогон показал 38 побед из 40 у того, кто
+       * просто жал одну кнопку.
+       */
+      if (!weapon) {
+        if (dist < reach + 30) {
+          enemy.guardLeft = (enemy.guardLeft || 0) - dt;
+          if (!enemy.guard || enemy.guardLeft <= 0) {
+            enemy.guard = MOVE_ORDER[Math.floor(Math.random() * MOVE_ORDER.length)];
+            /* Стойка держится долго: прочитать её должно быть можно, а
+               не угадывать в мелькании. Меняется она после размена. */
+            enemy.guardLeft = 1.4 + Math.random() * 0.8;
+          }
+        } else {
+          enemy.guard = null;
+        }
+      }
 
       if (dist > reach) {
         const step = (visible && hasSight(world, enemy.x, enemy.y, player.x, player.y))
@@ -256,18 +277,20 @@ export function thinkEnemy(world, enemy, dt, speed) {
         result.vy = step.y * speed.run;
         enemy.windup = 0;
       } else if (enemy.cooldown <= 0) {
-        enemy.windup = (enemy.windup || 0) + dt;
-
-        /* Замах и есть телеграф: приём живёт на экране раньше удара. */
+        /*
+         * У безоружного отдельного замаха нет: замах — это startup самого
+         * приёма, тот же, что и у игрока. Одна модель времени на обе
+         * стороны, поэтому размен читается одинаково в любую сторону.
+         */
         if (move) {
-          enemy.move = move.id;
-          enemy.moveLeft = 0.4;
-        }
-
-        if (enemy.windup > (move ? 0.34 : 0.22)) {
-          enemy.windup = 0;
           result.attack = true;
-          enemy.nextMove = null;
+          enemy.windup = 0;
+        } else {
+          enemy.windup = (enemy.windup || 0) + dt;
+          if (enemy.windup > 0.22) {
+            enemy.windup = 0;
+            result.attack = true;
+          }
         }
       }
       break;

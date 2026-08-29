@@ -28,11 +28,42 @@ export const BODY = 9;
  * оружие возвращает игре её главное правило: один удар — один труп.
  * Поэтому первые двое стоят между игроком и первой битой, а не наоборот.
  */
+/*
+ * У каждого приёма своё время.
+ *
+ * startup — сколько идёт замах, прежде чем удар состоится. Это и есть
+ * главная разница между приёмами: рука почти мгновенна, нога заметно
+ * медленнее, бросок приходится начинать заранее — и всё это время твой
+ * приём висит на виду и может быть перебит.
+ *
+ * recovery — сколько рука занята после. Чем медленнее приём, тем дороже
+ * стоит ошибка, и поэтому круг остаётся честным: сильный приём не бывает
+ * ещё и быстрым.
+ */
 export const MOVES = {
-  hand: { id: 'hand', name: 'РУКА', short: 'Р', beats: 'kick', reach: 30, arc: 1.9, cooldown: 0.28, colour: '#ffe06b' },
-  kick: { id: 'kick', name: 'НОГА', short: 'Н', beats: 'grab', reach: 36, arc: 1.5, cooldown: 0.38, colour: '#76ff9f' },
-  grab: { id: 'grab', name: 'БРОСОК', short: 'Б', beats: 'hand', reach: 26, arc: 1.2, cooldown: 0.46, colour: '#ff2d95' },
+  hand: {
+    id: 'hand', name: 'РУКА', short: 'Р', beats: 'kick',
+    reach: 30, arc: 1.9, startup: 0.07, recovery: 0.2, damage: 1, colour: '#ffe06b',
+  },
+  kick: {
+    id: 'kick', name: 'НОГА', short: 'Н', beats: 'grab',
+    reach: 38, arc: 1.5, startup: 0.2, recovery: 0.3, damage: 2, colour: '#76ff9f',
+  },
+  grab: {
+    id: 'grab', name: 'БРОСОК', short: 'Б', beats: 'hand',
+    reach: 26, arc: 1.2, startup: 0.3, recovery: 0.32, damage: 1, floors: true, colour: '#ff2d95',
+  },
 };
+
+/*
+ * Медленное обязано быть сильным, иначе быстрое побеждает всегда.
+ *
+ * Первый вариант давал всем приёмам по одному попаданию, и прогон сразу
+ * показал вырождение: та же рука выигрывала 38 боёв из 40 просто потому,
+ * что успевала первой. Теперь нога снимает сразу два деления, а бросок
+ * кладёт на пол — и это дороже урона, потому что лежачего добивают чем
+ * угодно.
+ */
 
 export const MOVE_ORDER = ['hand', 'kick', 'grab'];
 
@@ -256,6 +287,7 @@ export function createWorld(level) {
       cooldown: 0,
       hp: BARE_HP,
       move: null,        /* приём, который сейчас идёт */
+      moveStart: 0,      /* сколько осталось до попадания */
       moveLeft: 0,
       swing: 0,
       step: 0,
@@ -297,6 +329,7 @@ export function createWorld(level) {
         ammo: entity.type === 0 || entity.type === 10 ? 0 : 6,
         hp: BARE_HP,
         move: null,
+        moveStart: 0,
         moveLeft: 0,
         x, y, vx: 0, vy: 0,
         home: { x, y },
@@ -412,7 +445,15 @@ export function backstabReady(world, enemy) {
  * чтобы забить безнаказанно.
  */
 function bareStrike(world, attacker, target, move, from) {
-  const defence = target.move;
+  /*
+   * Отбить может только тот, кто сам сейчас замахивается.
+   *
+   * Пока «живым» считался любой недавний приём, длинный бросок работал
+   * ещё и щитом: прогон показал, что «всегда бросок» выигрывает 40 боёв
+   * из 40. Приём защищает ровно столько, сколько длится его замах, — и
+   * тогда медленный приём остаётся сильным, но перестаёт быть бесплатным.
+   */
+  const defence = target.moveStart > 0 ? target.move : (target.guard || null);
   const away = Math.atan2(target.y - attacker.y, target.x - attacker.x);
   const between = { x: (attacker.x + target.x) / 2, y: (attacker.y + target.y) / 2 };
 
@@ -423,6 +464,7 @@ function bareStrike(world, attacker, target, move, from) {
     target.vx += Math.cos(away) * 210;
     target.vy += Math.sin(away) * 210;
     target.move = null;
+    target.guardLeft = 0;
     attacker.move = null;
     attacker.cooldown = Math.max(attacker.cooldown, 0.22);
 
@@ -446,6 +488,7 @@ function bareStrike(world, attacker, target, move, from) {
      */
     attacker.move = null;
     attacker.cooldown = Math.max(attacker.cooldown, 0.34);
+    target.guardLeft = 0;
     attacker.vx -= Math.cos(away) * 120;
     attacker.vy -= Math.sin(away) * 120;
 
@@ -463,7 +506,7 @@ function bareStrike(world, attacker, target, move, from) {
 function damageBare(world, victim, striker, move, from) {
   const angle = Math.atan2(victim.y - striker.y, victim.x - striker.x);
 
-  victim.hp = (victim.hp === undefined ? BARE_HP : victim.hp) - 1;
+  victim.hp = (victim.hp === undefined ? BARE_HP : victim.hp) - (move.damage || 1);
   victim.move = null;
   victim.moveLeft = 0;
   victim.hitFlash = 0.14;
@@ -482,10 +525,17 @@ function damageBare(world, victim, striker, move, from) {
 
   if (victim.hp <= 0) {
     killEnemy(world, victim, angle, 'bare', { by: from, weapon: 'bare' });
-  } else {
-    victim.stagger = 0.32;
-    pop(world, victim.x, victim.y, 12, '255,255,255');
+    return;
   }
+
+  /* Бросок валит на пол: лежачего добивают чем угодно, и это решает бой. */
+  if (move.floors) {
+    knockDown(world, victim, angle);
+    return;
+  }
+
+  victim.stagger = 0.32;
+  pop(world, victim.x, victim.y, 12, '255,255,255');
 }
 
 
@@ -498,9 +548,26 @@ function damageBare(world, victim, striker, move, from) {
 function bareAttack(world, attacker, moveId, from) {
   const move = MOVES[moveId] || MOVES.hand;
 
-  attacker.cooldown = move.cooldown;
+  /*
+   * Нажатие только начинает приём. Удар случится через startup — и всё
+   * это время приём виден противнику и может быть перебит. Отсюда и
+   * разница характеров: рукой отвечают, ногой наказывают, бросок
+   * приходится заказывать заранее.
+   */
   attacker.move = move.id;
-  attacker.moveLeft = 0.22;
+  attacker.moveStart = move.startup;
+  attacker.moveLeft = move.startup + 0.16;
+  attacker.moveFrom = from;
+  attacker.cooldown = move.startup + move.recovery;
+  world.events.push({ type: 'wind', move: move.id, from });
+}
+
+
+/* Момент, когда замах превращается в удар. */
+function resolveBare(world, attacker, from) {
+  const move = MOVES[attacker.move];
+  if (!move) return;
+
   attacker.swing = 0.16;
 
   const candidates = from === 'player'
@@ -538,7 +605,7 @@ function bareAttack(world, attacker, moveId, from) {
 
   /* Вооружённого голыми руками не размениваешь — только сбиваешь с ног. */
   const armed = target !== world.player && Boolean(target.weapon);
-  if (armed || target === world.player && WEAPONS[target.weapon].lethal) {
+  if (armed || (target === world.player && WEAPONS[target.weapon] && WEAPONS[target.weapon].lethal)) {
     if (target === world.player) killPlayer(world, toTarget);
     else if (target.downed > 0) {
       killEnemy(world, target, toTarget, 'melee', { by: from, weapon: 'bare', execution: true });
@@ -551,6 +618,21 @@ function bareAttack(world, attacker, moveId, from) {
   }
 
   bareStrike(world, attacker, target, move, from);
+}
+
+
+/* Отсчёт замаха: общий для игрока и для врага. */
+function tickMove(world, ent, dt, from) {
+  if (ent.moveStart > 0) {
+    ent.moveStart -= dt;
+    if (ent.moveStart <= 0) {
+      ent.moveStart = 0;
+      resolveBare(world, ent, from);
+    }
+  }
+
+  ent.moveLeft = Math.max(0, (ent.moveLeft || 0) - dt);
+  if (ent.moveLeft <= 0 && ent.moveStart <= 0) ent.move = null;
 }
 
 
@@ -873,8 +955,7 @@ function updatePlayer(world, dt, intent) {
 
   player.cooldown = Math.max(0, player.cooldown - dt);
   player.swing = Math.max(0, player.swing - dt);
-  player.moveLeft = Math.max(0, (player.moveLeft || 0) - dt);
-  if (player.moveLeft <= 0) player.move = null;
+  tickMove(world, player, dt, 'player');
   player.swingHit = Math.max(0, (player.swingHit || 0) - dt);
   player.flash = Math.max(0, (player.flash || 0) - dt);
 
@@ -932,8 +1013,7 @@ function updateEnemy(world, enemy, dt) {
   enemy.swing = Math.max(0, (enemy.swing || 0) - dt);
   enemy.flash = Math.max(0, (enemy.flash || 0) - dt);
   enemy.hitFlash = Math.max(0, (enemy.hitFlash || 0) - dt);
-  enemy.moveLeft = Math.max(0, (enemy.moveLeft || 0) - dt);
-  if (enemy.moveLeft <= 0 && enemy.state !== 'chase') enemy.move = null;
+  tickMove(world, enemy, dt, 'enemy');
 
   if (enemy.downed > 0) {
     enemy.downed -= dt;

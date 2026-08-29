@@ -323,39 +323,65 @@ export function createRenderer(canvas) {
    * приём читался только по букве над головой. Теперь рука выбрасывается
    * вперёд кулаком, нога уходит по дуге, бросок — двумя руками сразу.
    */
+  /*
+   * Конечности по фазам.
+   *
+   * Приём теперь занимает время, и это время должно быть видно целиком:
+   * рука сначала уходит назад (замах), потом выстреливает (удар), потом
+   * возвращается (восстановление). В игре, где размен решают доли
+   * секунды, игрок обязан читать не только чужой выбор, но и то, на какой
+   * стадии этот выбор находится.
+   */
   function limbs(g, ent, palette) {
     const id = ent.move;
-    if (!id || !ent.swing || !MOVES[id]) return;
+    if (!id || !MOVES[id]) return;
 
     const move = MOVES[id];
-    const t = Math.min(1, Math.max(0, 1 - ent.swing / 0.16));
-    const push = Math.sin(t * Math.PI);          /* выброс и возврат */
+    const winding = (ent.moveStart || 0) > 0;
+    const wind = winding ? 1 - ent.moveStart / move.startup : 1;
+    const hit = ent.swing > 0 ? 1 - ent.swing / 0.16 : -1;
+
+    if (!winding && hit < 0) return;
+
+    /* Дуга набора вокруг бойца: сколько осталось до удара. */
+    if (winding) {
+      g.save();
+      g.strokeStyle = move.colour;
+      g.globalAlpha = 0.35 + wind * 0.5;
+      g.lineWidth = 3;
+      g.beginPath();
+      g.arc(ent.x, ent.y, BODY + 12, -Math.PI / 2, -Math.PI / 2 + wind * 6.28);
+      g.stroke();
+      g.restore();
+    }
+
+    /* Замах уводит конечность назад, удар выбрасывает её вперёд. */
+    const push = winding ? -0.35 * wind : Math.sin(Math.min(1, hit) * Math.PI);
 
     g.save();
     g.translate(ent.x, ent.y);
     g.rotate(ent.angle);
-    /* Цвет — от приёма, а не от тела: рука и нога обязаны отличаться. */
     g.strokeStyle = move.colour;
     g.fillStyle = move.colour;
     g.shadowColor = move.colour;
-    g.shadowBlur = 10;
+    g.shadowBlur = winding ? 6 : 12;
+    g.globalAlpha = winding ? 0.75 : 1;
     g.lineCap = 'round';
 
     if (id === 'hand') {
-      /* Рука: короткий прямой выброс с кулаком на конце. */
-      const reach = 6 + push * 24;
+      const reach = 6 + push * 26;
       g.lineWidth = 4;
       g.beginPath();
       g.moveTo(2, -3);
       g.lineTo(reach, -2);
       g.stroke();
       g.beginPath();
-      g.arc(reach, -2, 5, 0, 6.29);
+      g.arc(reach, -2, winding ? 3.5 : 5, 0, 6.29);
       g.fill();
     } else if (id === 'kick') {
-      /* Нога: длинная и низкая, идёт по дуге снизу вверх. */
-      const swing = -1.1 + t * 2.2;
-      const reach = 12 + push * 26;
+      /* Нога заносится назад по дуге и проходит вперёд с длинным следом. */
+      const swing = winding ? -1.1 - wind * 0.4 : -1.1 + Math.min(1, hit) * 2.2;
+      const reach = 12 + Math.max(0, push) * 28;
       g.rotate(swing);
       g.lineWidth = 6;
       g.beginPath();
@@ -363,20 +389,22 @@ export function createRenderer(canvas) {
       g.lineTo(reach, 4);
       g.stroke();
       g.fillRect(reach - 4, -1, 10, 10);
-      /* След дуги: по нему видно, что это мах, а не тычок. */
-      g.globalAlpha = 0.35;
-      g.lineWidth = 2;
-      g.beginPath();
-      g.arc(0, 0, reach, -1.1, swing);
-      g.stroke();
-      g.globalAlpha = 1;
-    } else {
-      /* Бросок: две руки вперёд, обе открытые. */
-      const reach = 6 + push * 20;
-      g.lineWidth = 3.5;
-      for (const side of [-6, 6]) {
+
+      if (!winding) {
+        g.globalAlpha = 0.35;
+        g.lineWidth = 2;
         g.beginPath();
-        g.moveTo(2, side * 0.5);
+        g.arc(0, 0, reach, -1.1, swing);
+        g.stroke();
+      }
+    } else {
+      /* Бросок раскрывается заранее: руки расходятся шире по мере замаха. */
+      const spread = winding ? 4 + wind * 8 : 6 + push * 4;
+      const reach = 6 + Math.max(0, push) * 22 + (winding ? wind * 4 : 0);
+      g.lineWidth = 3.5;
+      for (const side of [-spread, spread]) {
+        g.beginPath();
+        g.moveTo(2, side * 0.4);
         g.lineTo(reach, side);
         g.stroke();
         g.beginPath();
@@ -761,6 +789,19 @@ export function createRenderer(canvas) {
        * Телеграф приёма. Размен читается только если чужой выбор виден
        * раньше удара — иначе это лотерея, а не решение.
        */
+      /* Стойка: тусклое кольцо в цвете прикрытия, без буквы и без дуги. */
+      if (!enemy.move && enemy.guard && MOVES[enemy.guard]) {
+        g.save();
+        g.strokeStyle = MOVES[enemy.guard].colour;
+        g.globalAlpha = 0.5;
+        g.lineWidth = 2;
+        g.setLineDash([5, 4]);
+        g.beginPath();
+        g.arc(enemy.x, enemy.y, BODY + 7, 0, 6.29);
+        g.stroke();
+        g.restore();
+      }
+
       if (enemy.move && MOVES[enemy.move]) {
         const move = MOVES[enemy.move];
 
@@ -810,6 +851,8 @@ export function createRenderer(canvas) {
     body(g, player.x, player.y, player.angle, PALETTE.player, {
       weapon: player.weapon === 'fists' ? null : player.weapon,
       swing: player.swing,
+      /* Замах отклоняет корпус назад: вес приёма видно по всему телу. */
+      lean: player.moveStart > 0 ? -2 : 0,
     });
     limbs(g, player, PALETTE.player);
 
