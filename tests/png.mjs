@@ -137,6 +137,35 @@ export function cell(image, x, y, size) {
   return { painted, edge, rugged, tones: tones.size, sign };
 }
 
+/*
+ * Подпись целой картинки — восемь на восемь средних цветов, независимо от
+ * её размеров. Нужна, чтобы сравнивать разные файлы между собой: нож,
+ * обрез и катана обязаны отличаться друг от друга, а не только от пустоты.
+ */
+export function signature(image) {
+  const SIZE = 8;
+  const sign = new Float64Array(SIZE * SIZE * 4);
+  const counts = new Float64Array(SIZE * SIZE);
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const at = (y * image.width + x) * 4;
+      const cell = Math.min(SIZE - 1, Math.floor(y / image.height * SIZE)) * SIZE
+        + Math.min(SIZE - 1, Math.floor(x / image.width * SIZE));
+      const a = image.rgba[at + 3] / 255;
+      sign[cell * 4] += image.rgba[at] * a;
+      sign[cell * 4 + 1] += image.rgba[at + 1] * a;
+      sign[cell * 4 + 2] += image.rgba[at + 2] * a;
+      sign[cell * 4 + 3] += image.rgba[at + 3];
+      counts[cell] += 1;
+    }
+  }
+  for (let i = 0; i < SIZE * SIZE; i += 1) {
+    const n = counts[i] || 1;
+    for (let k = 0; k < 4; k += 1) sign[i * 4 + k] /= n;
+  }
+  return { sign };
+}
+
 /* Насколько две клетки различаются на глаз: средняя разница по каналам. */
 export function apart(a, b) {
   let sum = 0;

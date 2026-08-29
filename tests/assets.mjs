@@ -20,7 +20,7 @@ import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync } from 
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { readPng, writePng, cell, apart } from './png.mjs';
+import { readPng, writePng, cell, apart, signature } from './png.mjs';
 
 /* Пороги. Числа не с потолка: см. «Откуда пороги» в конце файла. */
 const BLANK = 0.02;      // меньше 2% закрашенного — клетка пустая
@@ -178,9 +178,33 @@ export function inspect(root) {
     else if (rel) checkSingle(report, root, rel);
   }
   for (const group of ['items', 'props', 'moves', 'fx', 'ui']) {
+    const seen = [];
     for (const spec of Object.values(manifest[group] || {})) {
       const rel = typeof spec === 'string' ? spec : spec?.image;
-      if (rel && rel.endsWith('.png')) checkSingle(report, root, rel);
+      if (!rel || !rel.endsWith('.png')) continue;
+      checkSingle(report, root, rel);
+      const image = load(root, rel);
+      if (image && !image.error) seen.push({ rel, image, sign: signature(image) });
+    }
+    /*
+     * Разные вещи обязаны выглядеть по-разному. В одной поставке нож,
+     * обрез, труба и катана оказались одним и тем же файлом — четыре
+     * предмета, отличающиеся именем. Сравниваем только одинаковые по
+     * размеру: картинки разных габаритов и так ни с чем не спутать.
+     */
+    const twins = [];
+    for (let i = 0; i < seen.length; i += 1) {
+      for (let j = i + 1; j < seen.length; j += 1) {
+        const a = seen[i];
+        const b = seen[j];
+        if (a.image.width !== b.image.width || a.image.height !== b.image.height) continue;
+        if (apart(a.sign, b.sign) < 2) twins.push(`${a.rel} = ${b.rel}`);
+      }
+    }
+    if (twins.length) {
+      report.add(`${group}: ${seen.length} файлов`, false,
+        `одно и то же под разными именами: ${twins.slice(0, 4).join(', ')}`
+        + (twins.length > 4 ? ` и ещё ${twins.length - 4}` : ''));
     }
   }
   return report;
