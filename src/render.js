@@ -13,6 +13,7 @@
  */
 
 import { TILE } from './level.js';
+import { pickFrame } from './assets.js';
 import { TILE_SIZE, BODY, WEAPONS, MOVES, BARE_HP, backstabReady } from './world.js';
 
 /*
@@ -269,6 +270,38 @@ export function createRenderer(canvas, assets = null) {
     return true;
   }
 
+/*
+ * Что сейчас делает тело — в терминах листа анимации.
+ *
+ * Замах и удар держатся в разных полях (приём отсчитывает moveStart,
+ * оружие — swing), но листу всё равно: ему нужен ряд и доля пройденного.
+ * Смещение по координатам разводит фазы соседей — иначе три громилы в
+ * кадре шагают в ногу, и это сразу видно.
+ */
+  function actorState(a) {
+    const busy = Math.max(a.swing || 0, a.moveStart || 0, a.windup || 0);
+    return {
+      moving: Math.hypot(a.vx || 0, a.vy || 0) > 30,
+      attack: busy > 0 ? (a.weapon && a.weapon !== 'fists' ? 'second' : true) : null,
+      offset: (a.x + a.y) * 0.03,
+    };
+  }
+
+  function actorPhase(a) {
+    const left = Math.max(a.swing || 0, a.moveStart || 0, a.windup || 0);
+    return left > 0 ? Math.max(0, Math.min(0.99, 1 - left / 0.28)) : 0;
+  }
+
+  /* Кадр из листа анимации — та же посадка, только вырезка из атласа. */
+  function sheetSprite(g, art, frame, x, y, angle, size) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(angle);
+    g.drawImage(art.image, frame.col * art.size, frame.row * art.size, art.size, art.size,
+      -size / 2, -size / 2, size, size);
+    g.restore();
+  }
+
   /* Спрайт по центру и по углу: у всех наших картинок нос смотрит вправо. */
   function sprite(g, img, x, y, angle, size) {
     g.save();
@@ -304,9 +337,14 @@ export function createRenderer(canvas, assets = null) {
       g.fill();
       g.restore();
 
-      sprite(g, art, x, y, angle, 32);
+      if (art.rows) {
+        const frame = pickFrame(art.rows, opts.state || {}, opts.time || 0, opts.phase || 0);
+        sheetSprite(g, art, frame, x, y, angle, 32);
+      } else {
+        sprite(g, art.image, x, y, angle, 32);
+      }
 
-      if (opts.weapon && opts.weapon !== 'fists') {
+      if (!art.rows && opts.weapon && opts.weapon !== 'fists') {
         const item = assets.item(opts.weapon);
         if (item) {
           g.save();
@@ -826,6 +864,9 @@ export function createRenderer(canvas, assets = null) {
         weapon: enemy.weapon,
         swing: enemy.swing || 0,
         windup: enemy.windup || 0,
+        state: actorState(enemy),
+        phase: actorPhase(enemy),
+        time: world.time,
         art: enemy.weapon === 'bat' ? 'thug_bat'
           : enemy.weapon === 'pistol' ? 'shooter_pistol' : 'brawler',
       });
@@ -940,6 +981,9 @@ export function createRenderer(canvas, assets = null) {
       art: player.weapon === 'bat' ? 'player_bat'
         : player.weapon === 'pistol' ? 'player_pistol' : 'player',
       swing: player.swing,
+      state: actorState(player),
+      phase: actorPhase(player),
+      time: world.time,
       /* Замах отклоняет корпус назад: вес приёма видно по всему телу. */
       lean: player.moveStart > 0 ? -2 : 0,
     });

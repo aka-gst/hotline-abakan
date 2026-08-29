@@ -418,15 +418,8 @@ function buildIntent(raw) {
   }
 
   /* Удержание — это очередь ударов, а не один: темп задаёт откат оружия. */
-  for (const code of Object.keys(MOVE_KEYS)) {
-    if (input.tookKey(code)) {
-      intent.move = MOVE_KEYS[code];
-      intent.attack = true;
-    }
-  }
-
-  const fired = input.tookKey('Fire') || input.tookKey('KeyJ');
-  intent.attack = intent.attack || fired || raw.attackHeld;
+  const fired = input.tookKey('Fire') || ATTACK_KEYS.some((code) => input.tookKey(code));
+  intent.attack = fired || raw.attackHeld;
 
   /*
    * Палец не умеет одновременно целиться стиком и жать кнопку: это один и
@@ -580,7 +573,11 @@ function frame(now) {
 
 
 function step(now) {
-  const dt = Math.min(0.05, (now - previous) / 1000);
+  /* Шаг зажат с обеих сторон: сверху — чтобы после сворачивания вкладки
+     мир не прыгнул на секунду вперёд, снизу — чтобы время ни при каких
+     обстоятельствах не пошло назад. Отрицательный шаг откручивает все
+     отсчёты вспять: вспышка вместо затухания копится, откаты растут. */
+  const dt = Math.max(0, Math.min(0.05, (now - previous) / 1000));
   previous = now;
 
   resize();

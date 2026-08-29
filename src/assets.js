@@ -10,6 +10,38 @@
  * при этом работает. Ни одного места, где отсутствие файла роняет кадр.
  */
 
+/*
+ * Какой кадр листа показать.
+ *
+ * Вынесено отдельной чистой функцией по одной причине: это единственное
+ * место в рисовании, которое можно проверить без браузера, — и проверять
+ * его надо, потому что промах здесь выглядит как «персонаж дёргается» и
+ * ищется глазами полдня.
+ *
+ * Ходьба и покой идут по кругу от общих часов: тела в кадре не должны
+ * шагать в ногу. Удар, наоборот, привязан к собственному ходу приёма —
+ * иначе замах на экране разъедется с замахом в правилах.
+ */
+const IDLE_RATE = 2.5;
+const WALK_RATE = 9;
+
+export function pickFrame(rows, state = {}, time = 0, phase = 0) {
+  if (!rows) return { row: 0, col: 0 };
+  const has = (name) => Array.isArray(rows[name]) && rows[name][1] > 0;
+  const pick = (name, col) => ({ row: rows[name][0], col: Math.max(0, Math.min(rows[name][1] - 1, col)) });
+
+  if (state.dead && has('death')) return pick('death', Math.floor(state.dead * rows.death[1]));
+  if (state.attack) {
+    const name = state.attack === 'second' && has('attack2') ? 'attack2' : 'attack';
+    if (has(name)) return pick(name, Math.floor(phase * rows[name][1]));
+  }
+  if (state.moving && has('walk')) {
+    return pick('walk', Math.floor(time * WALK_RATE + (state.offset || 0)) % rows.walk[1]);
+  }
+  if (has('idle')) return pick('idle', Math.floor(time * IDLE_RATE + (state.offset || 0)) % rows.idle[1]);
+  return { row: 0, col: 0 };
+}
+
 export function createAssets(base = 'assets/') {
   const images = new Map();
   let manifest = null;
@@ -57,8 +89,61 @@ export function createAssets(base = 'assets/') {
 
     const list = [...new Set(paths(manifest))];
     await Promise.all(list.map(fetchImage));
+    for (const [name, spec] of Object.entries(manifest.actors || {})) {
+      if (spec && spec.rows && !worthDrawing(spec)) {
+        images.delete(spec.image);
+        console.warn(`лист ${name} пустой — рисуем кодом`);
+      }
+    }
     loaded = images.size > 0;
     return loaded;
+  }
+
+  /*
+   * Быстрая приёмка листа прямо в браузере.
+   *
+   * Три поставки подряд приходили с правильными размерами и пустым
+   * нутром: тридцать одинаковых силуэтов в три цвета. Движок клал такое
+   * поверх процедурной графики и делал игру хуже, молча. Тот же счёт, что
+   * в tests/assets.mjs, только короче: если в кадре нет двух десятков
+   * оттенков или ходьба не двигается — лист не берём.
+   *
+   * Проверка стоит один кадр на старте и снимает целый класс поставок,
+   * которые выглядят как графика, но графикой не являются.
+   */
+  function worthDrawing(spec) {
+    const img = image(spec.image);
+    if (!img) return false;
+    const size = spec.size || 64;
+    const board = document.createElement('canvas');
+    board.width = img.width;
+    board.height = img.height;
+    const ctx = board.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+
+    const read = (col, row) => {
+      const data = ctx.getImageData(col * size, row * size, size, size).data;
+      const tones = new Set();
+      let painted = 0;
+      let ink = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 8) continue;
+        painted += 1;
+        ink += data[i] + data[i + 1] + data[i + 2];
+        tones.add((data[i] >> 3 << 10) | (data[i + 1] >> 3 << 5) | (data[i + 2] >> 3));
+      }
+      return { tones: tones.size, painted, ink };
+    };
+
+    const walk = spec.rows.walk;
+    const first = read(0, spec.rows.idle ? spec.rows.idle[0] : 0);
+    if (first.painted < size * size * 0.02 || first.tones < 12) return false;
+    if (walk && walk[1] > 1) {
+      const a = read(0, walk[0]);
+      const b = read(1, walk[0]);
+      if (a.painted === b.painted && a.ink === b.ink) return false;
+    }
+    return true;
   }
 
   const THEME_KEYS = ['bar', 'server'];
@@ -75,8 +160,22 @@ export function createAssets(base = 'assets/') {
       return img ? { image: img, size: set.size || 64, map: set.map || {} } : null;
     },
 
+    /*
+     * Персонаж. Поддержаны обе формы записи: одиночная картинка, как в
+     * первой поставке, и лист анимации из шести колонок и пяти рядов,
+     * как просит задание. Одиночная отдаётся как есть, лист — вместе с
+     * раскладкой, чтобы рисующий сам выбрал ряд и кадр.
+     */
     actor(name) {
-      return image(manifest && manifest.actors && manifest.actors[name]);
+      const spec = manifest && manifest.actors && manifest.actors[name];
+      if (!spec) return null;
+      if (typeof spec === 'string') {
+        const img = image(spec);
+        return img ? { image: img, rows: null } : null;
+      }
+      const img = image(spec.image);
+      if (!img) return null;
+      return { image: img, rows: spec.rows || null, size: spec.size || 64, cols: spec.cols || 6 };
     },
 
     item(name) {
