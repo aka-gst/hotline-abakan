@@ -855,6 +855,21 @@ function updatePlayer(world, dt, intent) {
   player.swingHit = Math.max(0, (player.swingHit || 0) - dt);
   player.flash = Math.max(0, (player.flash || 0) - dt);
 
+  /*
+   * Одна кнопка на подбор и бросок. Что именно она делает, решает
+   * обстановка: рядом лежит оружие — берём (меняя то, что в руках), не
+   * лежит ничего и руки заняты — швыряем. Две отдельные клавиши для
+   * действий, которые никогда не спорят между собой, — лишняя нагрузка
+   * на пальцы.
+   */
+  if (intent.grab) {
+    const near = world.pickups.some((pickup) => !pickup.flying
+      && Math.hypot(pickup.x - player.x, pickup.y - player.y) < 34);
+
+    if (near) tryPickup(world);
+    else tryThrow(world);
+  }
+
   if (intent.pickup) tryPickup(world);
   if (intent.throw) tryThrow(world);
 

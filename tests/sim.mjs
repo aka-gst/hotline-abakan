@@ -198,7 +198,8 @@ function nearest(world) {
     step({ ...idle, attack: true });
   };
 
-  const alive = world.enemies.filter((e) => e.alive && e.weapon === 'bat');
+  /* Битой падает любой с одного удара, поэтому годятся все живые. */
+  const alive = world.enemies.filter((e) => e.alive);
   strike(alive[0]);
   const first = score.state.score;
   check('первое убийство стоит базовых очков', first === 100, String(first));
@@ -476,22 +477,28 @@ function nearest(world) {
     lose.player.hp === BARE_HP - 1 && lose.enemy.hp === BARE_HP,
     `игрок ${lose.player.hp}, враг ${lose.enemy.hp}`);
 
-  /* Три попадания — и боец готов. */
+  /*
+   * Три попадания — и боец готов. Держим его в покое и лицом к игроку:
+   * приём противника ИИ выбирает случайно, и в бою эта проверка ловила бы
+   * не правило, а везение.
+   */
   const world = createWorld(CAMPAIGN[0]);
   const enemy = world.enemies.find((e) => !e.weapon);
   const player = world.player;
   player.weapon = 'fists';
-  enemy.state = 'chase';
-  enemy.angle = Math.PI;
 
   for (let i = 0; i < 3; i += 1) {
+    enemy.state = 'idle';
+    enemy.angle = Math.PI;
+    enemy.move = null;
+    enemy.nextMove = null;
+    enemy.stagger = 0;
     player.cooldown = 0;
     player.x = enemy.x - 22;
     player.y = enemy.y;
     player.angle = 0;
-    enemy.move = null;
     update(world, DT, { ...idle, aimAngle: 0, attack: true, move: 'hand' });
-    for (let k = 0; k < 25; k += 1) update(world, DT, idle);
+    for (let k = 0; k < 20; k += 1) update(world, DT, idle);
   }
   check('три попадания кладут безоружного', !enemy.alive);
 

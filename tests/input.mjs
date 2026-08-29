@@ -36,35 +36,35 @@ const check = (name, ok, detail = '') => {
   if (!ok) failures += 1;
 };
 
-/* --- клавиатура: ход и прицел разведены --- */
+/* --- клавиатура: левая рука ходит, правая дерётся --- */
 fire(windowListeners, 'keydown', { code: 'KeyD', repeat: false });
 let state = input.read();
 check('D ведёт вправо', state.moveX === 1 && state.moveY === 0, `${state.moveX},${state.moveY}`);
-check('без стрелок прицела с клавиш нет', state.aimKeys === null);
 
 fire(windowListeners, 'keydown', { code: 'ArrowUp', repeat: false });
 state = input.read();
-check('стрелка целит, не сбивая ход',
-  state.moveX === 1 && state.moveY === 0 && state.aimKeys.y === -1 && state.aimKeys.x === 0,
-  `ход ${state.moveX},${state.moveY} прицел ${state.aimKeys.x},${state.aimKeys.y}`);
-
-fire(windowListeners, 'keyup', { code: 'KeyD' });
-state = input.read();
-check('без WASD стрелка и ведёт, и целит',
-  state.moveY === -1 && state.aimKeys.y === -1, `${state.moveX},${state.moveY}`);
+check('стрелка не вмешивается в ход', state.moveX === 1 && state.moveY === 0,
+  `${state.moveX},${state.moveY}`);
+check('стрелка приходит нажатием, а не осью', input.tookKey('ArrowUp') === true);
 fire(windowListeners, 'keyup', { code: 'ArrowUp' });
 
+fire(windowListeners, 'keyup', { code: 'KeyD' });
+fire(windowListeners, 'keydown', { code: 'ArrowLeft', repeat: false });
+state = input.read();
+check('стрелки не ходят даже без WASD', state.moveX === 0 && state.moveY === 0,
+  `${state.moveX},${state.moveY}`);
+fire(windowListeners, 'keyup', { code: 'ArrowLeft' });
+input.endFrame();
+
+/* Пробел отвечает за оружие, а не за удар. */
 fire(windowListeners, 'keydown', { code: 'Space', repeat: false });
 state = input.read();
-check('пробел держит удар', state.attackHeld === true);
+check('пробел больше не бьёт', state.attackHeld === false);
+check('пробел приходит нажатием', input.tookKey('Space') === true);
 fire(windowListeners, 'keyup', { code: 'Space' });
-state = input.read();
-check('отпущенный пробел удар отпускает', state.attackHeld === false);
-
-fire(windowListeners, 'keydown', { code: 'KeyD', repeat: false });
-state = input.read();
 
 fire(windowListeners, 'keydown', { code: 'KeyW', repeat: false });
+fire(windowListeners, 'keydown', { code: 'KeyD', repeat: false });
 state = input.read();
 check('диагональ не быстрее прямой',
   Math.abs(Math.hypot(state.moveX, state.moveY) - 1) < 0.001,

@@ -62,10 +62,21 @@ const ui = {
 };
 
 /*
- * Приёмы рукопашной. Нажатие и выбирает приём, и бьёт им: отдельная
- * кнопка «ударить» здесь только добавила бы шаг между решением и ударом.
+ * Приёмы рукопашной на стрелках: нажатие и выбирает приём, и бьёт им.
+ * Отдельная кнопка «ударить» добавила бы шаг между решением и ударом, а
+ * вся игра держится на его отсутствии.
+ *
+ * С оружием в руках все три бьют одинаково — железо не разбирает, рукой
+ * ты замахнулся или ногой.
  */
-const MOVE_KEYS = { Digit1: 'hand', Digit2: 'kick', Digit3: 'grab' };
+const MOVE_KEYS = {
+  ArrowLeft: 'hand',
+  ArrowRight: 'kick',
+  ArrowUp: 'grab',
+  Digit1: 'hand',
+  Digit2: 'kick',
+  Digit3: 'grab',
+};
 
 const SFX_BY_EVENT = {
   slam: 'slam',
@@ -227,7 +238,7 @@ function setToast(text, seconds = 2) {
 function controlsHint() {
   return input.isTouch() || matchMedia('(pointer: coarse)').matches
     ? 'ЛЕВЫЙ ПАЛЕЦ ВЕДЁТ. ПРАВЫЙ ЦЕЛИТ И БЬЁТ САМ, КОГДА ЦЕЛЬ ПОД ПРИЦЕЛОМ. КНОПКИ СПРАВА — ВЗЯТЬ И БРОСИТЬ.'
-    : 'WASD — ИДТИ, СТРЕЛКИ — ЦЕЛИТЬ, ПРОБЕЛ — БИТЬ. МЫШЬ ТОЖЕ ЦЕЛИТ. E — ВЗЯТЬ, Q — БРОСИТЬ, R — ЗАНОВО.';
+    : 'WASD — ИДТИ. ← РУКА, → НОГА, ↑ БРОСОК. ПРОБЕЛ — ВЗЯТЬ ИЛИ БРОСИТЬ ОРУЖИЕ. ПРИЦЕЛ ВЕДЁТСЯ САМ, МЫШЬ ТОЖЕ ЦЕЛИТ. R — ЗАНОВО.';
 }
 
 
@@ -360,7 +371,9 @@ function buildIntent(raw) {
     aimAngle: null,
     attack: false,
     move: null,
-    pickup: input.tookKey('KeyE') || input.tookKey('Pickup'),
+    /* Пробел один отвечает и за подбор, и за бросок: выбирает обстановка. */
+    grab: input.tookKey('Space') || input.tookKey('Pickup'),
+    pickup: input.tookKey('KeyE'),
     throw: input.tookKey('KeyQ') || input.tookKey('Throw'),
   };
 
@@ -402,7 +415,7 @@ function buildIntent(raw) {
     }
   }
 
-  const fired = input.tookKey('Fire') || input.tookKey('Space') || input.tookKey('KeyJ');
+  const fired = input.tookKey('Fire') || input.tookKey('KeyJ');
   intent.attack = intent.attack || fired || raw.attackHeld;
 
   /*
@@ -601,7 +614,8 @@ function step(now) {
   const restart = input.tookKey('KeyR');
   if (scene === 'dead' || scene === 'dying') {
     /* После смерти перезапускает всё, что под рукой: R, пробел, удар. */
-    if (restart || input.tookKey('Fire') || input.tookKey('Space') || input.tookKey('KeyJ')) {
+    if (restart || input.tookKey('Fire') || input.tookKey('Space')
+      || input.tookKey('ArrowLeft') || input.tookKey('KeyJ')) {
       startLevel(level, { silent: true });
     }
   } else if (restart && (scene === 'play' || scene === 'pause')) {

@@ -190,8 +190,7 @@ export function createInput(surface) {
       moveX: 0,
       moveY: 0,
       aimStick: null,
-      aimKeys: null,
-      attackHeld: mouse.down || buttons.attack || keys.has('Space') || keys.has('KeyJ'),
+      attackHeld: mouse.down || buttons.attack || keys.has('KeyJ'),
       touch: touchMode,
       mouse,
       sticks,
@@ -205,24 +204,17 @@ export function createInput(surface) {
      * Если WASD не нажат, стрелки заодно и ведут: иначе тот, кто привык
      * ходить стрелками, оказался бы обездвижен.
      */
-    const walkX = axis('KeyA', 'KeyD');
-    const walkY = axis('KeyW', 'KeyS');
-    const aimX = axis('ArrowLeft', 'ArrowRight');
-    const aimY = axis('ArrowUp', 'ArrowDown');
-
-    if (aimX || aimY) state.aimKeys = { x: aimX, y: aimY };
+    /*
+     * Левая рука ходит (WASD), правая дерётся (стрелки). Целиться в этой
+     * раскладке нечем — и не нужно: прицел держится за живую цель сам, а
+     * мышь, если её трогают, забирает наводку себе.
+     */
+    state.moveX = axis('KeyA', 'KeyD');
+    state.moveY = axis('KeyW', 'KeyS');
 
     /* Зажатая кнопка — тоже работа мышью: во время стрельбы курсор не
        двигается, и без этой оговорки прицел уехал бы за ногами игрока. */
     mouse.moved = mouse.down || performance.now() - mouse.movedAt < MOUSE_MEMORY;
-
-    if (walkX || walkY) {
-      state.moveX = walkX;
-      state.moveY = walkY;
-    } else {
-      state.moveX = aimX;
-      state.moveY = aimY;
-    }
 
     if (sticks.move.active) {
       const len = Math.hypot(sticks.move.dx, sticks.move.dy);
