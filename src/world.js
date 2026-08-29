@@ -1005,6 +1005,8 @@ function updatePlayer(world, dt, intent) {
         world.events.push({ type: 'dry' });
       }
     } else if (player.weapon === 'fists') {
+      /* Ввод приёмов не присылает: у игрока одна кнопка удара. Аргумент
+         оставлен ради дуэлей с боссами, где приёмы вернутся. */
       bareAttack(world, player, intent.move || 'hand', 'player');
     } else {
       swingMelee(world, player, 'player');
