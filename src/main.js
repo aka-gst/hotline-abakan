@@ -8,7 +8,7 @@
 
 import { CAMPAIGN } from './levels.js';
 import { decode, encode } from './level.js';
-import { createWorld, update, WEAPONS, MOVES, BARE_HP } from './world.js';
+import { createWorld, update, WEAPONS, MOVES, BARE_HP, beatNow } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
 import { createRenderer } from './render.js';
 import { createAssets } from './assets.js';
@@ -49,6 +49,7 @@ const ui = {
   veilTitle: $('veilTitle'),
   veilText: $('veilText'),
   veilStats: $('veilStats'),
+  weaponIcon: $('weaponIcon'),
   veilAction: $('veilAction'),
   veilSecond: $('veilSecond'),
   veilCode: $('veilCode'),
@@ -208,9 +209,97 @@ function showVeil(config) {
 }
 
 function hideVeil() {
+  stopTyping();
   ui.veil.hidden = true;
   ui.dead.hidden = true;
   audio.setMenu(false);
+}
+
+/*
+ * Итоги набираются на глазах, строка за строкой.
+ *
+ * Раньше вся таблица появлялась разом, и её пролистывали не читая. Когда
+ * строки набегают по очереди, глаз успевает зацепиться за каждую — и
+ * видно, за что именно начислено. Это единственное место в игре, где
+ * ожидание уместно: бой уже закончился.
+ *
+ * Но и здесь оно не навязано: любое нажатие дописывает всё разом, а тем,
+ * кто просил систему не анимировать, таблица показывается сразу.
+ */
+const CHAR_MS = 9;
+const LINE_MS = 70;
+let typing = null;
+
+function stopTyping() {
+  if (!typing) return;
+  clearTimeout(typing.timer);
+  typing.finish();
+  typing = null;
+}
+
+function typeScore(final) {
+  const rows = final.lines.map((line) => ({
+    label: line.label,
+    value: line.value ? `+${line.value}` : '—',
+  }));
+
+  const html = rows
+    .map((row) => `<li><span></span><b hidden>${row.value}</b></li>`)
+    .join('');
+  ui.scoreLines.innerHTML = html;
+  ui.scoreTotal.textContent = '0';
+
+  const items = [...ui.scoreLines.children];
+  const finish = () => {
+    items.forEach((item, i) => {
+      item.querySelector('span').textContent = rows[i].label;
+      item.querySelector('b').hidden = false;
+    });
+    ui.scoreTotal.textContent = final.total;
+  };
+
+  /* В скрытой вкладке таймеры браузер придерживает до секунды на шаг:
+     вернувшийся игрок увидел бы недопечатанную таблицу. Там, где смотреть
+     некому, печатать нечего. */
+  if (document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    finish();
+    return;
+  }
+
+  let row = 0;
+  let char = 0;
+  typing = { timer: 0, finish };
+
+  const tick = () => {
+    if (row >= rows.length) {
+      /* Итог не печатается, а набегает: цифра должна выглядеть суммой. */
+      const from = performance.now();
+      const roll = () => {
+        const done = Math.min(1, (performance.now() - from) / 260);
+        ui.scoreTotal.textContent = Math.round(final.total * done);
+        if (done < 1) typing.timer = setTimeout(roll, 16);
+        else typing = null;
+      };
+      roll();
+      return;
+    }
+
+    const item = items[row];
+    const label = rows[row].label;
+    char += 1;
+    item.querySelector('span').textContent = label.slice(0, char);
+
+    if (char >= label.length) {
+      item.querySelector('b').hidden = false;
+      row += 1;
+      char = 0;
+      typing.timer = setTimeout(tick, LINE_MS);
+      return;
+    }
+    typing.timer = setTimeout(tick, CHAR_MS);
+  };
+
+  tick();
 }
 
 /*
@@ -221,11 +310,7 @@ function fillScore(final, best, record) {
   ui.veilScore.dataset.rank = final.rank;
   ui.rankLetter.textContent = final.rank;
 
-  ui.scoreLines.innerHTML = final.lines
-    .map((line) => `<li><span>${line.label}</span><b>${line.value ? '+' + line.value : '—'}</b></li>`)
-    .join('');
-
-  ui.scoreTotal.textContent = final.total;
+  typeScore(final);
 
   if (record) {
     ui.scoreBest.textContent = 'НОВЫЙ РЕКОРД ЭТАЖА';
@@ -455,6 +540,14 @@ function updateHud(force) {
   const weapon = WEAPONS[player.weapon];
 
   if (force || ui.weapon.textContent !== weapon.name) ui.weapon.textContent = weapon.name;
+
+  /* Иконка того, что в руках. Оружие берём из тех же файлов, которыми оно
+     нарисовано на полу, — тогда поднятое с пола и показанное в углу
+     совпадают, и узнавать приходится один раз. */
+  const icon = player.weapon === 'bat' ? 'assets/items/bat.png'
+    : player.weapon === 'pistol' ? 'assets/items/pistol.png'
+      : 'assets/ui/fists.png';
+  if (ui.weaponIcon && !ui.weaponIcon.src.endsWith(icon)) ui.weaponIcon.src = icon;
 
   if (weapon.kind === 'gun') {
     ui.ammo.innerHTML = '<i></i>'.repeat(Math.max(0, player.ammo));
@@ -833,6 +926,11 @@ audio.onBeat(() => {
    контекст в любой момент, а разбудить его можно только по жесту. */
 window.addEventListener('pointerdown', () => audio.unlock());
 
+/* Нажатие во время печати итогов дописывает их разом: ждать заставляют
+   только те игры, которые не уважают чужое время. */
+window.addEventListener('pointerdown', stopTyping);
+window.addEventListener('keydown', stopTyping);
+
 /*
  * Диагностический вход. Через него проверяется то, что не проверить
  * снаружи: дошло ли нажатие до мира и в каком состоянии игра. Ничего не
@@ -846,6 +944,11 @@ window.avto = {
      заморожен, и без него нельзя проверить ничего, что происходит во
      времени, — например, что этаж вообще засчитывается. */
   step,
+  /* Экраны напрямую. Дойти до итогов «по-настоящему» в панели
+     предпросмотра стоит десятка шагов и всё равно упирается в то, что
+     событие выхода живёт один кадр; а посмотреть на карточку глазами
+     надо после каждой правки её вёрстки. */
+  screens: { call: callScreen, clear: clearScreen, dead: deathScreen, pause: pauseScreen },
 };
 
 const fromHash = levelFromHash();

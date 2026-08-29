@@ -173,6 +173,16 @@ html, body {
   backdrop-filter: blur(3px);
 }
 
+/* Иконка оружия: пиксели не сглаживаем, иначе бита превращается в пятно. */
+.weapon-icon {
+  display: block;
+  width: 44px;
+  height: 22px;
+  margin-bottom: 4px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
 .hud-slot b {
   font: 800 13px/1 var(--mono);
   letter-spacing: .1em;
@@ -517,12 +527,7 @@ html, body {
   .dead { padding-right: 96px; }
 }
 
-/* Телефон, положенный набок: три кнопки в столбик занимают почти всю
-   высоту, и верхняя подходит вплотную к «ЗВУК ВЫКЛ». Промах по ней
-   посреди драки выключает музыку — поэтому в этой ориентации кнопки
-   меньше, а зазор больше. */
-@media (pointer: coarse) and (max-height: 430px) {
-  /* Доля музыки на кнопке удара: короткая вспышка, которую видно краем
+/* Доля музыки на кнопке удара: короткая вспышка, которую видно краем
    глаза, не отвлекаясь от этажа. */
 .pad-key.on-beat {
   animation: padBeat .18s ease-out;
@@ -533,8 +538,24 @@ html, body {
   to { box-shadow: 0 0 0 12px #76ff9f00; }
 }
 
-.pad-big { width: 64px; height: 64px; font-size: 10px; }
+/*
+ * Телефон, положенный набок, — самый тесный экран, какой у игры бывает:
+ * сверху его ест панель браузера, снизу лежит палец. Кнопки меньше,
+ * чтобы верхняя не подходила вплотную к «ЗВУК ВЫКЛ» (промах по ней
+ * посреди драки выключает музыку), и полупрозрачные: они нужны пальцу, а
+ * не глазу, и закрывать ими угол, откуда выходят враги, нельзя.
+ * Показания в этой ориентации жмутся в одну узкую строку.
+ */
+@media (pointer: coarse) and (max-height: 430px) {
+  .pad-big { width: 64px; height: 64px; font-size: 10px; }
   .pad-small { width: 54px; height: 54px; }
+  .pad-key { opacity: .62; }
+  .pad-key:active, .pad-key.is-held { opacity: 1; }
+
+  .hud { gap: 6px; }
+  .hud-slot { padding: 4px 7px; }
+  .hud-slot b { font-size: 10px; }
+  .weapon-icon { width: 30px; height: 15px; margin-bottom: 2px; }
 }
 
 
@@ -565,8 +586,16 @@ html, body {
 
 .veil-card {
   width: min(430px, 100%);
+  /*
+   * Высота считается в динамических единицах: на телефоне адресная
+   * строка и панель вкладок съедают часть окна, и карточка, посчитанная
+   * в обычных vh, вылезала за экран вместе с кнопкой «дальше». Старым
+   * браузерам остаётся vh — там просто чуть теснее.
+   */
   max-height: 92vh;
+  max-height: 92dvh;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 24px 22px 20px;
   border: 2px solid var(--acid);
   /* Картинка и градиент одним слоёным фоном. Раньше картинка стояла
@@ -700,6 +729,14 @@ html, body {
 
 .score-best[data-record="1"] { color: var(--acid); }
 
+/* Кнопка «дальше» прилипает к низу карточки: длинные итоги её уносили
+   за край, и до неё приходилось долистывать. */
+.veil-action {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+}
+
 .veil-action, .veil-second {
   width: 100%;
   min-height: 48px;
@@ -779,13 +816,27 @@ html, body {
 @media (max-width: 430px) {
   .hud { flex-direction: column; }
   .hud-slot { padding: 6px 9px; }
-  .hud-slot b { font-size: 11px; }
+  /* Иконка оружия: пиксели не сглаживаем, иначе бита превращается в пятно. */
+.weapon-icon {
+  display: block;
+  width: 44px;
+  height: 22px;
+  margin-bottom: 4px;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
-@media (max-height: 520px) {
-  .veil-card { padding: 16px; }
-  .veil h1 { font-size: 22px; }
-  .veil p { margin-bottom: 10px; }
+.hud-slot b { font-size: 11px; }
+}
+
+@media (max-height: 560px) {
+  .veil-card { padding: 14px 14px 10px; }
+  .veil h1 { font-size: 20px; }
+  .veil p { margin-bottom: 8px; font-size: 12px; }
+  .veil-logo { width: min(180px, 55%); margin-bottom: 8px; }
+  .veil-score { padding: 10px 12px; }
+  .score-lines li, .veil-score li { padding: 2px 0; }
+  .rank b, #rankLetter { font-size: 34px; }
   .veil-stats span[data-warn="1"] {
   color: var(--pink);
 }
