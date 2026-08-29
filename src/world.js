@@ -1253,8 +1253,18 @@ function updateEnemy(world, enemy, dt) {
 
   const move = thinkEnemy(world, enemy, dt, { walk: ENEMY_WALK, run: ENEMY_RUN });
 
-  enemy.vx = lerp(enemy.vx, move.vx, clamp(dt * 9, 0, 1));
-  enemy.vy = lerp(enemy.vy, move.vy, clamp(dt * 9, 0, 1));
+  /*
+   * По льду скользят все.
+   *
+   * Сначала скользил только игрок — из опасения, что заносимый враг
+   * превратит бой в лотерею. Никита решил иначе, и он прав: лёд, который
+   * действует на одного, читается как штраф, а лёд, который действует на
+   * всех, — как место. Громила, влетающий мимо тебя юзом, и стрелок,
+   * который не может резко разорвать дистанцию, — это и есть двор зимой.
+   */
+  const grip = SLIPPERY_THEMES.has(world.level.theme) ? ICE_GRIP : 1;
+  enemy.vx = lerp(enemy.vx, move.vx, clamp(dt * 9 * grip, 0, 1));
+  enemy.vy = lerp(enemy.vy, move.vy, clamp(dt * 9 * grip, 0, 1));
   moveBody(world, enemy, enemy.vx * dt, enemy.vy * dt);
 
   /* Тела расталкиваются, иначе толпа слипается в одну точку. */

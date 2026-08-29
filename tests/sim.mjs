@@ -535,17 +535,47 @@ function nearest(world) {
   check('лёд остаётся играбельным', yard < 30 && yardStop < 30,
     `разгон ${yard}, торможение ${yardStop}`);
 
-  /* Враги на льду не скользят. */
-  const level = CAMPAIGN.find((l) => l.title === 'ДВОР');
-  const world = createWorld(level);
-  const enemy = world.enemies[0];
-  enemy.state = 'chase';
-  let seen = 0;
-  for (let i = 0; i < 60; i += 1) {
-    update(world, DT, { ...idle });
-    seen = Math.max(seen, Math.hypot(enemy.vx, enemy.vy));
+  /*
+   * Скользят все, включая врагов. Проверяется, что они на льду медленнее
+   * разгоняются, но всё-таки доезжают: лёд должен менять бой, а не
+   * отменять противника.
+   */
+  const chaseSpeed = (title) => {
+    const level = CAMPAIGN.find((l) => l.title === title);
+    const world = createWorld(level);
+    const enemy = world.enemies[0];
+    enemy.state = 'chase';
+    const marks = [];
+    for (let i = 0; i < 90; i += 1) {
+      enemy.state = 'chase';
+      update(world, DT, { ...idle });
+      marks.push(Math.hypot(enemy.vx, enemy.vy));
+    }
+    return { at15: marks[15], top: Math.max(...marks) };
+  };
+
+  const roomChase = chaseSpeed('БАР «ЛЕДЯНОЙ»');
+  const yardChase = chaseSpeed('ДВОР');
+  check('враги на льду разгоняются медленнее',
+    yardChase.at15 < roomChase.at15 * 0.7,
+    `через 15 кадров: в комнате ${Math.round(roomChase.at15)}, во дворе ${Math.round(yardChase.at15)}`);
+  check('но всё-таки разгоняются', yardChase.top > 100,
+    `быстрее всего ${Math.round(yardChase.top)}`);
+
+  /* И доезжают: лёд меняет бой, а не отменяет противника. */
+  const yardLevel = CAMPAIGN.find((l) => l.title === 'ДВОР');
+  const chase = createWorld(yardLevel);
+  const hunter = chase.enemies[0];
+  hunter.x = chase.player.x + TILE_SIZE * 6;
+  hunter.y = chase.player.y;
+  let closest = 1e9;
+  for (let i = 0; i < 400; i += 1) {
+    hunter.state = 'chase';
+    update(chase, DT, { ...idle });
+    closest = Math.min(closest, Math.hypot(hunter.x - chase.player.x, hunter.y - chase.player.y));
   }
-  check('противники по льду ходят как обычно', seen > 100, `быстрее всего ${Math.round(seen)}`);
+  check('по льду до игрока всё равно доходят', closest < 30,
+    `подошёл на ${Math.round(closest)}`);
 }
 
 /* --- H1. Этажи, которые собрались сами --- */
