@@ -25,6 +25,7 @@ import { readPng, writePng, cell, apart } from './png.mjs';
 /* Пороги. Числа не с потолка: см. «Откуда пороги» в конце файла. */
 const BLANK = 0.02;      // меньше 2% закрашенного — клетка пустая
 const TONES = 3;         // меньше трёх цветов в кадре — заливка, а не рисунок
+const RUGGED = 18;       // ниже — овал, а не человек: см. «Откуда пороги»
 const MOVED = 0.25;      // соседние кадры ряда должны отличаться хотя бы так
 const TILE_APART = 8;    // пол, стена, дверь и выход — заметно разные
 const TILE_SAME = 3;     // ближе этого две плитки считаем одной
@@ -86,6 +87,7 @@ function checkSheet(report, root, rel, rows, size = 64, cols = 6) {
   const blank = [];
   const still = [];
   const tones = [];
+  const rugged = [];
   let frames = 0;
   for (const [name, [row, count]] of Object.entries(rows)) {
     const cells = [];
@@ -94,6 +96,7 @@ function checkSheet(report, root, rel, rows, size = 64, cols = 6) {
       frames += 1;
       cells.push(c);
       tones.push(c.tones);
+      if (c.painted > size * size * BLANK) rugged.push(c.rugged);
       if (c.painted < size * size * BLANK) blank.push(`${name}[${x}]`);
     }
     const moves = cells.slice(1).map((c, i) => apart(c, cells[i]));
@@ -101,10 +104,12 @@ function checkSheet(report, root, rel, rows, size = 64, cols = 6) {
   }
 
   const palette = median(tones);
-  report.add(`${rel}: ${frames} кадров, цветов в кадре ${palette}`,
-    blank.length === 0 && palette >= TONES,
+  const shape = median(rugged) || 0;
+  report.add(`${rel}: ${frames} кадров, цветов ${palette}, изрезанность ${shape.toFixed(0)}`,
+    blank.length === 0 && palette >= TONES && shape >= RUGGED,
     [blank.length ? `пустые: ${blank.join(', ')}` : '',
-      palette < TONES ? 'заливка вместо рисунка' : ''].filter(Boolean).join('; '),
+      palette < TONES ? 'заливка вместо рисунка' : '',
+      shape < RUGGED ? 'овал вместо человека' : ''].filter(Boolean).join('; '),
     still.length ? `не двигается: ${still.join(', ')}` : '');
 }
 
@@ -195,18 +200,33 @@ function paint(width, height, draw) {
   return writePng({ width, height, rgba });
 }
 
-/* Годный лист: в каждом кадре своя поза и полтора десятка оттенков. */
+/*
+ * Годный лист: в каждом кадре своя поза, полтора десятка оттенков и
+ * силуэт с руками и ногами — то есть изрезанный, а не круглый. Раньше
+ * здесь был залитый прямоугольник, и он же проваливал проверку на овал:
+ * образец годного обязан быть годным по всем правилам сразу, иначе
+ * проверка проверяет не то, что думает.
+ */
 function goodSheet() {
   return paint(384, 320, (dot) => {
     for (const [, [row, count]] of Object.entries(ROWS)) {
       for (let f = 0; f < count; f += 1) {
-        const ox = f * 64; const oy = row * 64;
-        for (let y = 12; y < 52; y += 1) {
-          for (let x = 16; x < 48; x += 1) {
-            const shade = (x * 3 + y * 5 + f * 17 + row * 29) % 24;
-            dot(ox + x + f, oy + y, 20 + shade * 4, 60 + shade * 6, 30 + shade * 3);
-          }
-        }
+        const ox = f * 64;
+        const oy = row * 64;
+        const ink = (x, y, seed) => {
+          const shade = (x * 3 + y * 5 + f * 17 + row * 29 + seed) % 24;
+          dot(ox + x, oy + y, 20 + shade * 4, 60 + shade * 6, 30 + shade * 3);
+        };
+        /* туловище */
+        for (let y = 24; y < 44; y += 1) for (let x = 26; x < 40; x += 1) ink(x, y, 0);
+        /* голова */
+        for (let y = 16; y < 25; y += 1) for (let x = 29; x < 37; x += 1) ink(x, y, 7);
+        /* руки: одна вытянута вперёд и меняет длину от кадра к кадру */
+        for (let x = 40; x < 48 + f * 2; x += 1) for (let y = 28; y < 32; y += 1) ink(x, y, 3);
+        for (let x = 20; x < 26; x += 1) for (let y = 30 + (f % 2); y < 34 + (f % 2); y += 1) ink(x, y, 5);
+        /* ноги */
+        for (let y = 44; y < 52; y += 1) for (let x = 27; x < 31; x += 1) ink(x, y, 11);
+        for (let y = 44; y < 50 + (f % 3); y += 1) for (let x = 35; x < 39; x += 1) ink(x, y, 13);
       }
     }
   });
@@ -276,6 +296,13 @@ if (process.argv.includes('--sam')) {
  * Считать по палитре, человек ли на картинке, нельзя; это видно глазами и
  * только глазами. Осталась защита от заливки: меньше трёх цветов — не
  * рисунок.
+ *
+ * Изрезанность силуэта — квадрат периметра к площади. У круга это 4π,
+ * около 12.6, и меньше не бывает ни у чего. Замерено на двух поставках:
+ * тёмные овалы с неоновым ободком дают 10–16, крупные фигуры с руками и
+ * ногами — 26–31. Порог 18 стоит ровно между. Это единственное число,
+ * которое отличает нарисованного человека от заготовки; ни палитра, ни
+ * число кадров этого не ловят — обе поставки по ним неразличимы.
  *
  * Порог движения снижен с 1.0 до 0.25: в поставке, где удар честно
  * нарисован тремя кадрами, соседние расходятся на 0.5, а одинаковые

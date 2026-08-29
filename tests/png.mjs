@@ -99,9 +99,16 @@ const SIGN = 8;
 
 export function cell(image, x, y, size) {
   let painted = 0;
+  let edge = 0;
   const tones = new Set();
   const block = size / SIGN;
   const sign = new Float64Array(SIGN * SIGN * 4);
+
+  /* Закрашен ли пиксель клетки — с проверкой границ: за краем пусто. */
+  const on = (px, py) => {
+    if (px < 0 || py < 0 || px >= size || py >= size) return false;
+    return image.rgba[((y * size + py) * image.width + (x * size + px)) * 4 + 3] > 8;
+  };
   for (let dy = 0; dy < size; dy += 1) {
     for (let dx = 0; dx < size; dx += 1) {
       const at = ((y * size + dy) * image.width + (x * size + dx)) * 4;
@@ -113,11 +120,21 @@ export function cell(image, x, y, size) {
       sign[cellAt + 3] += a;
       if (a < 8) continue;
       painted += 1;
+      if (!on(dx - 1, dy) || !on(dx + 1, dy) || !on(dx, dy - 1) || !on(dx, dy + 1)) edge += 1;
       tones.add((image.rgba[at] >> 3 << 10) | (image.rgba[at + 1] >> 3 << 5) | (image.rgba[at + 2] >> 3));
     }
   }
   for (let i = 0; i < sign.length; i += 1) sign[i] /= block * block;
-  return { painted, tones: tones.size, sign };
+  /*
+   * Изрезанность силуэта: квадрат периметра, делённый на площадь. У круга
+   * это 4π ≈ 12.6 — минимум, какой вообще бывает. У человека с плечами,
+   * руками и оружием контур длиннее вдвое-втрое. Число безразмерное, от
+   * размера фигуры не зависит, и именно оно отличает нарисованного бойца
+   * от тёмного овала с неоновым ободком — то, чего не видно ни по
+   * палитре, ни по числу кадров.
+   */
+  const rugged = painted ? (edge * edge) / painted : 0;
+  return { painted, edge, rugged, tones: tones.size, sign };
 }
 
 /* Насколько две клетки различаются на глаз: средняя разница по каналам. */
