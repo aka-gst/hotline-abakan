@@ -11,6 +11,7 @@ import { decode, encode } from './level.js';
 import { createWorld, update, WEAPONS, MOVES, BARE_HP } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
 import { createRenderer } from './render.js';
+import { createAssets } from './assets.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { parseHash, buildLink, compare, cleanNick, NICK_KEY } from './challenge.js';
@@ -19,7 +20,17 @@ import { createScore, readBest, writeBest, rankFor } from './score.js';
 const $ = (id) => document.getElementById(id);
 
 const canvas = $('screen');
-const renderer = createRenderer(canvas);
+const assets = createAssets();
+const renderer = createRenderer(canvas, assets);
+
+/*
+ * Картинки приезжают асинхронно и могут не приехать вовсе. Как только
+ * загрузились — просим перепечь уровень: до этого момента он нарисован
+ * примитивами, и это нормальный, а не запасной вид.
+ */
+assets.boot().then((ok) => {
+  if (ok) renderer.invalidate();
+});
 const input = createInput(canvas);
 const audio = createAudio();
 
@@ -33,6 +44,7 @@ const ui = {
   toast: $('toast'),
   dead: $('dead'),
   veil: $('veil'),
+  veilLogo: $('veilLogo'),
   veilKicker: $('veilKicker'),
   veilTitle: $('veilTitle'),
   veilText: $('veilText'),
@@ -176,6 +188,8 @@ function refreshLink() {
    ========================================================= */
 
 function showVeil(config) {
+  /* Логотип уместен на входе и мешает на разборе забега. */
+  ui.veilLogo.hidden = config.tone !== 'call';
   ui.veilKicker.textContent = config.kicker || '';
   ui.veilTitle.textContent = config.title || '';
   ui.veilText.textContent = config.text || '';

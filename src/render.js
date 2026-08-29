@@ -63,7 +63,7 @@ export const THEMES = [
 ];
 
 
-export function createRenderer(canvas) {
+export function createRenderer(canvas, assets = null) {
   const ctx = canvas.getContext('2d', { alpha: false });
 
   /*
@@ -113,6 +113,7 @@ export function createRenderer(canvas) {
 
   function bake(world) {
     const theme = THEMES[world.level.theme] || THEMES[0];
+    const sheet = assets && assets.ready ? assets.tiles(world.level.theme || 0) : null;
     const w = world.w * TILE_SIZE;
     const h = world.h * TILE_SIZE;
 
@@ -134,6 +135,17 @@ export function createRenderer(canvas) {
         const py = y * TILE_SIZE;
 
         if (tile === TILE.WALL) continue;
+
+        if (sheet) {
+          blit(bakedCtx, sheet, ((x + y) & 1) ? 'floor' : 'floor_alt', px, py);
+          if (tile === TILE.RUG) blit(bakedCtx, sheet, 'rug', px, py);
+          if (tile === TILE.DOOR) {
+            const left = x > 0 ? world.tiles[y * world.w + (x - 1)] : TILE.WALL;
+            const right = x < world.w - 1 ? world.tiles[y * world.w + (x + 1)] : TILE.WALL;
+            blit(bakedCtx, sheet, left === TILE.WALL && right === TILE.WALL ? 'door_v' : 'door_h', px, py);
+          }
+          continue;
+        }
 
         bakedCtx.fillStyle = ((x + y) & 1) ? theme.floor : theme.floorAlt;
         bakedCtx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
@@ -247,6 +259,25 @@ export function createRenderer(canvas) {
 
   function invalidate() { bakedFor = null; }
 
+  /* Клетка из атласа в клетку уровня. Имени нет в карте — молча пропускаем:
+     неполный тайлсет должен рисовать что может, а не падать. */
+  function blit(target, sheet, name, px, py) {
+    const cell = sheet.map[name];
+    if (!cell) return false;
+    target.drawImage(sheet.image, cell[0] * sheet.size, cell[1] * sheet.size, sheet.size, sheet.size,
+      px, py, TILE_SIZE, TILE_SIZE);
+    return true;
+  }
+
+  /* Спрайт по центру и по углу: у всех наших картинок нос смотрит вправо. */
+  function sprite(g, img, x, y, angle, size) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(angle);
+    g.drawImage(img, -size / 2, -size / 2, size, size);
+    g.restore();
+  }
+
 
   /* =======================================================
      ФИГУРЫ
@@ -262,6 +293,31 @@ export function createRenderer(canvas) {
    */
   function body(g, x, y, angle, palette, opts = {}) {
     const lean = opts.lean || 0;
+
+    /* Есть спрайт — рисуем его; тень всё равно наша, она общая для всех. */
+    const art = opts.art && assets && assets.ready ? assets.actor(opts.art) : null;
+    if (art) {
+      g.save();
+      g.fillStyle = 'rgba(0,0,0,.55)';
+      g.beginPath();
+      g.ellipse(x + 3, y + 4, BODY + 2, BODY + 1, 0, 0, 6.29);
+      g.fill();
+      g.restore();
+
+      sprite(g, art, x, y, angle, 32);
+
+      if (opts.weapon && opts.weapon !== 'fists') {
+        const item = assets.item(opts.weapon);
+        if (item) {
+          g.save();
+          g.translate(x, y);
+          g.rotate(angle);
+          g.drawImage(item, 4, -8, 32, 16);
+          g.restore();
+        }
+      }
+      return;
+    }
 
     g.save();
     g.translate(x, y);
@@ -342,6 +398,35 @@ export function createRenderer(canvas) {
     const hit = ent.swing > 0 ? 1 - ent.swing / 0.16 : -1;
 
     if (!winding && hit < 0) return;
+
+    /*
+     * Если художник прислал раскадровку — рисуем её: кадр выбирается фазой,
+     * а не временем, поэтому длинный замах броска и короткий замах руки
+     * читаются одинаково.
+     */
+    const sheet = assets && assets.ready ? assets.move(id) : null;
+    if (sheet) {
+      const frame = winding ? 0 : (hit < 0.55 ? 1 : 2);
+      const index = Math.min(sheet.frames - 1, frame);
+
+      if (winding) {
+        g.save();
+        g.strokeStyle = move.colour;
+        g.globalAlpha = 0.35 + wind * 0.5;
+        g.lineWidth = 3;
+        g.beginPath();
+        g.arc(ent.x, ent.y, BODY + 12, -Math.PI / 2, -Math.PI / 2 + wind * 6.28);
+        g.stroke();
+        g.restore();
+      }
+
+      g.save();
+      g.translate(ent.x, ent.y);
+      g.rotate(ent.angle);
+      g.drawImage(sheet.image, index * sheet.size, 0, sheet.size, sheet.size, -32, -32, 64, 64);
+      g.restore();
+      return;
+    }
 
     /* Дуга набора вокруг бойца: сколько осталось до удара. */
     if (winding) {
@@ -563,7 +648,7 @@ export function createRenderer(canvas) {
   function drawCorpses(g, world) {
     for (const corpse of world.corpses) {
       const jitter = corpse.twitch > 0 ? (Math.random() - 0.5) * corpse.twitch * 2 : 0;
-      body(g, corpse.x + jitter, corpse.y, corpse.angle, PALETTE.dead, { lean: 3 });
+      body(g, corpse.x + jitter, corpse.y, corpse.angle, PALETTE.dead, { lean: 3, art: 'corpse' });
     }
   }
 
@@ -741,6 +826,8 @@ export function createRenderer(canvas) {
         weapon: enemy.weapon,
         swing: enemy.swing || 0,
         windup: enemy.windup || 0,
+        art: enemy.weapon === 'bat' ? 'thug_bat'
+          : enemy.weapon === 'pistol' ? 'shooter_pistol' : 'brawler',
       });
       limbs(g, enemy, palette);
 
@@ -850,6 +937,8 @@ export function createRenderer(canvas) {
 
     body(g, player.x, player.y, player.angle, PALETTE.player, {
       weapon: player.weapon === 'fists' ? null : player.weapon,
+      art: player.weapon === 'bat' ? 'player_bat'
+        : player.weapon === 'pistol' ? 'player_pistol' : 'player',
       swing: player.swing,
       /* Замах отклоняет корпус назад: вес приёма видно по всему телу. */
       lean: player.moveStart > 0 ? -2 : 0,

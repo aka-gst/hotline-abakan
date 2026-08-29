@@ -15,6 +15,13 @@
   <title>ОДИН УДАР</title>
 
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <!-- Ссылку-вызов пересылают в мессенджерах: пусть у неё будет лицо. -->
+  <meta property="og:title" content="ОДИН УДАР">
+  <meta property="og:description" content="Умирают все с одного касания. Пройди этаж быстрее того, кто прислал ссылку.">
+  <meta property="og:image" content="https://aka-gst.ru/udar/assets/ui/og.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="style.css?v=1">
 </head>
 
@@ -94,6 +101,7 @@
 
   <div class="veil-card">
 
+    <img id="veilLogo" class="veil-logo" src="assets/ui/logo.svg" alt="" hidden>
     <span id="veilKicker" class="veil-kicker">СООБЩЕНИЕ</span>
     <h1 id="veilTitle">ОДИН УДАР</h1>
     <p id="veilText"></p>

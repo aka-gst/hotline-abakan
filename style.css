@@ -550,7 +550,21 @@ html, body {
 
 .veil[hidden] { display: none; }
 
+.veil-logo {
+  display: block;
+  width: min(260px, 70%);
+  margin: 0 auto 14px;
+}
+
+.veil-logo[hidden] { display: none; }
+
 .veil-card {
+  /* Фон карточки — картинкой, если она есть: путь один и тот же, нет файла
+     — браузер просто не покажет слой, и останется прежний градиент. */
+  background-image: url('assets/ui/veil.png');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: luminosity;
   width: min(430px, 100%);
   max-height: 92vh;
   overflow: auto;

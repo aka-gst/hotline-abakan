@@ -1,0 +1,154 @@
+{
+  "tiles": {
+    "bar": {
+      "image": "tiles-bar.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "wall_body": [
+          2,
+          0
+        ],
+        "wall_top": [
+          3,
+          0
+        ],
+        "wall_edge": [
+          4,
+          0
+        ],
+        "door_h": [
+          5,
+          0
+        ],
+        "door_v": [
+          6,
+          0
+        ],
+        "table": [
+          7,
+          0
+        ],
+        "glass": [
+          0,
+          1
+        ],
+        "rug": [
+          1,
+          1
+        ],
+        "exit": [
+          2,
+          1
+        ]
+      }
+    },
+    "server": {
+      "image": "tiles-server.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "wall_body": [
+          2,
+          0
+        ],
+        "wall_top": [
+          3,
+          0
+        ],
+        "wall_edge": [
+          4,
+          0
+        ],
+        "door_h": [
+          5,
+          0
+        ],
+        "door_v": [
+          6,
+          0
+        ],
+        "table": [
+          7,
+          0
+        ],
+        "glass": [
+          0,
+          1
+        ],
+        "rug": [
+          1,
+          1
+        ],
+        "exit": [
+          2,
+          1
+        ]
+      }
+    }
+  },
+  "actors": {
+    "player": "actors/player.png",
+    "player_bat": "actors/player_bat.png",
+    "player_pistol": "actors/player_pistol.png",
+    "brawler": "actors/brawler.png",
+    "thug_bat": "actors/thug_bat.png",
+    "shooter_pistol": "actors/shooter_pistol.png",
+    "corpse": "actors/corpse.png"
+  },
+  "moves": {
+    "hand": {
+      "image": "moves/hand.png",
+      "frames": 3,
+      "size": 128
+    },
+    "kick": {
+      "image": "moves/kick.png",
+      "frames": 3,
+      "size": 128
+    },
+    "grab": {
+      "image": "moves/grab.png",
+      "frames": 3,
+      "size": 128
+    }
+  },
+  "items": {
+    "bat": "items/bat.png",
+    "pistol": "items/pistol.png"
+  },
+  "fx": {
+    "pop": "fx/pop.png",
+    "blood": {
+      "image": "fx/blood.png",
+      "frames": 6,
+      "size": 96
+    },
+    "muzzle": "fx/muzzle.png",
+    "spark": "fx/spark.png",
+    "clash": "fx/clash.png",
+    "casing": "fx/casing.png"
+  },
+  "ui": {
+    "logo": "ui/logo.svg",
+    "veil": "ui/veil.png",
+    "og": "ui/og.png",
+    "move_hand": "ui/move-hand.png",
+    "move_kick": "ui/move-kick.png",
+    "move_grab": "ui/move-grab.png"
+  }
+}
