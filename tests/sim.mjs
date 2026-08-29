@@ -472,10 +472,19 @@ function nearest(world) {
   const win = duel('hand', 'kick');
   check('рука бьёт ногу', win.enemy.hp === BARE_HP - 1, `осталось ${win.enemy.hp}`);
 
+  /*
+   * Перебитый приём не бьёт нападавшего, а гаснет: иначе выходит «я ударил
+   * — и получил я же», и это читается как несправедливость, а не как
+   * проигранный размен. Наказание — потерянное время, рука занята дольше.
+   */
   const lose = duel('hand', 'grab');
-  check('бросок ловит руку — прилетает игроку',
-    lose.player.hp === BARE_HP - 1 && lose.enemy.hp === BARE_HP,
+  check('перебитый приём никого не ранит',
+    lose.player.hp === BARE_HP && lose.enemy.hp === BARE_HP,
     `игрок ${lose.player.hp}, враг ${lose.enemy.hp}`);
+  check('но рука занята дольше обычного', lose.player.cooldown > 0.3,
+    `откат ${lose.player.cooldown.toFixed(2)}`);
+  check('и об этом сказано событием',
+    lose.world.events.some((e) => e.type === 'parry'));
 
   /*
    * Три попадания — и боец готов. Держим его в покое и лицом к игроку:

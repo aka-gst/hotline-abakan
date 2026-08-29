@@ -213,10 +213,21 @@ html, body {
 }
 
 .moves {
-  color: #8a7c99;
+  color: #6f6280;
   font: 700 8px var(--mono);
-  letter-spacing: .1em;
+  letter-spacing: .08em;
 }
+
+/* Цвета приёмов те же, что и у конечностей с кольцами на врагах: подсказка
+   и бой должны говорить на одном языке. */
+.moves i {
+  font-style: normal;
+  font-weight: 800;
+}
+
+.moves i[data-move="hand"] { color: #ffe06b; }
+.moves i[data-move="kick"] { color: #76ff9f; }
+.moves i[data-move="grab"] { color: #ff2d95; }
 
 .moves[hidden] { display: none; }
 

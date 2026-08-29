@@ -324,49 +324,64 @@ export function createRenderer(canvas) {
    * вперёд кулаком, нога уходит по дуге, бросок — двумя руками сразу.
    */
   function limbs(g, ent, palette) {
-    const move = ent.move;
-    if (!move || !ent.swing) return;
+    const id = ent.move;
+    if (!id || !ent.swing || !MOVES[id]) return;
 
+    const move = MOVES[id];
     const t = Math.min(1, Math.max(0, 1 - ent.swing / 0.16));
     const push = Math.sin(t * Math.PI);          /* выброс и возврат */
 
     g.save();
     g.translate(ent.x, ent.y);
     g.rotate(ent.angle);
-    g.strokeStyle = palette.neon;
-    g.lineWidth = 3.5;
+    /* Цвет — от приёма, а не от тела: рука и нога обязаны отличаться. */
+    g.strokeStyle = move.colour;
+    g.fillStyle = move.colour;
+    g.shadowColor = move.colour;
+    g.shadowBlur = 10;
     g.lineCap = 'round';
-    g.shadowColor = palette.neon;
-    g.shadowBlur = 8;
 
-    if (move === 'hand') {
-      const reach = 6 + push * 22;
+    if (id === 'hand') {
+      /* Рука: короткий прямой выброс с кулаком на конце. */
+      const reach = 6 + push * 24;
+      g.lineWidth = 4;
       g.beginPath();
-      g.moveTo(2, -4);
+      g.moveTo(2, -3);
       g.lineTo(reach, -2);
       g.stroke();
-      g.fillStyle = palette.visor;
       g.beginPath();
-      g.arc(reach, -2, 4, 0, 6.29);
+      g.arc(reach, -2, 5, 0, 6.29);
       g.fill();
-    } else if (move === 'kick') {
-      const swing = -0.9 + t * 1.8;
-      const reach = 10 + push * 24;
+    } else if (id === 'kick') {
+      /* Нога: длинная и низкая, идёт по дуге снизу вверх. */
+      const swing = -1.1 + t * 2.2;
+      const reach = 12 + push * 26;
       g.rotate(swing);
-      g.lineWidth = 4.5;
+      g.lineWidth = 6;
       g.beginPath();
-      g.moveTo(0, 2);
-      g.lineTo(reach, 2);
+      g.moveTo(0, 4);
+      g.lineTo(reach, 4);
       g.stroke();
-      g.fillStyle = palette.visor;
-      g.fillRect(reach - 3, -2, 7, 8);
+      g.fillRect(reach - 4, -1, 10, 10);
+      /* След дуги: по нему видно, что это мах, а не тычок. */
+      g.globalAlpha = 0.35;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, 0, reach, -1.1, swing);
+      g.stroke();
+      g.globalAlpha = 1;
     } else {
-      const reach = 6 + push * 18;
-      for (const side of [-5, 5]) {
+      /* Бросок: две руки вперёд, обе открытые. */
+      const reach = 6 + push * 20;
+      g.lineWidth = 3.5;
+      for (const side of [-6, 6]) {
         g.beginPath();
-        g.moveTo(2, side * 0.6);
+        g.moveTo(2, side * 0.5);
         g.lineTo(reach, side);
         g.stroke();
+        g.beginPath();
+        g.arc(reach, side, 3.5, 0, 6.29);
+        g.fill();
       }
     }
 
@@ -748,14 +763,27 @@ export function createRenderer(canvas) {
        */
       if (enemy.move && MOVES[enemy.move]) {
         const move = MOVES[enemy.move];
-        g.fillStyle = 'rgba(0,0,0,.72)';
-        g.fillRect(enemy.x - 8, enemy.y - BODY - 22, 16, 15);
+
+        /* Кольцо в цвете приёма: букву читать не обязательно, цвет виден
+           боковым зрением, а в бою только оно и работает. */
+        g.save();
         g.strokeStyle = move.colour;
-        g.lineWidth = 1.5;
-        g.strokeRect(enemy.x - 8, enemy.y - BODY - 22, 16, 15);
+        g.lineWidth = 2.5;
+        g.shadowColor = move.colour;
+        g.shadowBlur = 9;
+        g.beginPath();
+        g.arc(enemy.x, enemy.y, BODY + 8, 0, 6.29);
+        g.stroke();
+        g.restore();
+
+        g.fillStyle = 'rgba(0,0,0,.8)';
+        g.fillRect(enemy.x - 10, enemy.y - BODY - 26, 20, 18);
+        g.strokeStyle = move.colour;
+        g.lineWidth = 2;
+        g.strokeRect(enemy.x - 10, enemy.y - BODY - 26, 20, 18);
         g.fillStyle = move.colour;
-        g.font = '900 11px ui-monospace, monospace';
-        g.fillText(move.short, enemy.x - 3.5, enemy.y - BODY - 11);
+        g.font = '900 14px ui-monospace, monospace';
+        g.fillText(move.short, enemy.x - 4.5, enemy.y - BODY - 13);
       }
 
       /* Стойкость безоружного: три деления, по одному за попадание. */

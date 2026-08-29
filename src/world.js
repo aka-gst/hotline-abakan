@@ -413,23 +413,46 @@ export function backstabReady(world, enemy) {
  */
 function bareStrike(world, attacker, target, move, from) {
   const defence = target.move;
+  const away = Math.atan2(target.y - attacker.y, target.x - attacker.x);
+  const between = { x: (attacker.x + target.x) / 2, y: (attacker.y + target.y) / 2 };
 
   if (defence && defence === move.id) {
     /* Приём в приём: обоих отбрасывает, никто ничего не получает. */
-    const away = Math.atan2(target.y - attacker.y, target.x - attacker.x);
-    attacker.vx -= Math.cos(away) * 190;
-    attacker.vy -= Math.sin(away) * 190;
-    target.vx += Math.cos(away) * 190;
-    target.vy += Math.sin(away) * 190;
+    attacker.vx -= Math.cos(away) * 210;
+    attacker.vy -= Math.sin(away) * 210;
+    target.vx += Math.cos(away) * 210;
+    target.vy += Math.sin(away) * 210;
     target.move = null;
+    attacker.move = null;
+    attacker.cooldown = Math.max(attacker.cooldown, 0.22);
+
+    pop(world, between.x, between.y, 16, '255,255,255');
+    spark(world, between.x, between.y, away, 2.4, 10, '#ffffff', 170);
     world.fx.shake = Math.max(world.fx.shake, 5);
-    world.events.push({ type: 'clash', move: move.id });
+    world.fx.hitstop = Math.max(world.fx.hitstop, 0.05);
+    world.events.push({ type: 'clash', move: move.id, x: between.x, y: between.y });
     return;
   }
 
   if (defence && MOVES[defence] && MOVES[defence].beats === move.id) {
-    /* Защита перебила приём — бьют уже нападавшего. */
-    damageBare(world, attacker, target, MOVES[defence], from === 'player' ? 'enemy' : 'player');
+    /*
+     * Приём перебит.
+     *
+     * Раньше здесь прилетало нападавшему, и это читалось как несправедливость:
+     * я ударил — а получил я же. Теперь удар просто гасится: атака пропала,
+     * рука занята треть секунды, и этого хватает, чтобы противник успел
+     * ответить по-настоящему. Наказание есть, но оно за темп, а не вместо
+     * собственного удара.
+     */
+    attacker.move = null;
+    attacker.cooldown = Math.max(attacker.cooldown, 0.34);
+    attacker.vx -= Math.cos(away) * 120;
+    attacker.vy -= Math.sin(away) * 120;
+
+    pop(world, between.x, between.y, 14, '255,224,107');
+    spark(world, between.x, between.y, away + Math.PI, 1.6, 7, MOVES[defence].colour, 150);
+    world.fx.shake = Math.max(world.fx.shake, 3.5);
+    world.events.push({ type: 'parry', move: defence, by: from === 'player' ? 'enemy' : 'player' });
     return;
   }
 
