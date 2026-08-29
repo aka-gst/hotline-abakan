@@ -164,15 +164,22 @@ export function generateLevel(seed = 1) {
     }
   }
 
-  /* Оружие: без него безоружный этаж превращается в марафон из двух ударов. */
+  /*
+   * Оружие. Без него этаж превращается в марафон из двух ударов, с
+   * избытком — в тир. Тихого (нож, труба, бутылка) кладётся больше, чем
+   * громкого: выстрел поднимает весь этаж, и находка ствола должна быть
+   * событием, а не правилом.
+   */
+  const loud = ['p', 'g'];
+  const quiet = ['b', 'n', 'r', 'o'];
   const guns = range(1, 2);
-  const bats = range(1, 3);
-  for (let i = 0; i < guns + bats; i += 1) {
+  const melee = range(2, 4);
+  for (let i = 0; i < guns + melee; i += 1) {
     const room = rooms[Math.floor(random() * rooms.length)];
     const x = range(room.x0, room.x1);
     const y = range(room.y0, room.y1);
     if (!free(x, y)) continue;
-    map[y][x] = i < guns ? 'p' : 'b';
+    map[y][x] = i < guns ? pick(loud) : pick(quiet);
   }
 
   const theme = seed % 2;

@@ -624,6 +624,54 @@ export function createRenderer(canvas, assets = null) {
       return;
     }
 
+    if (weapon === 'pipe') {
+      g.save();
+      g.rotate(-0.4 + push * 0.09 + raise * 0.06);
+      g.fillStyle = '#9aa3b8';
+      g.fillRect(4, -2.5, 26, 5);
+      g.fillStyle = '#5f6980';
+      g.fillRect(26, -3.5, 5, 7);
+      g.restore();
+      return;
+    }
+
+    if (weapon === 'knife') {
+      g.save();
+      g.rotate(-0.2 + push * 0.06);
+      g.fillStyle = '#2a2130';
+      g.fillRect(4, -1.5, 7, 3);
+      g.fillStyle = '#eaf6ff';
+      g.beginPath();
+      g.moveTo(11, -2.5);
+      g.lineTo(22, 0);
+      g.lineTo(11, 2.5);
+      g.closePath();
+      g.fill();
+      g.restore();
+      return;
+    }
+
+    if (weapon === 'bottle') {
+      g.save();
+      g.rotate(-0.45 + push * 0.08);
+      g.fillStyle = '#4fd6a0';
+      g.fillRect(4, -4, 12, 8);
+      g.fillRect(16, -2, 8, 4);
+      g.fillStyle = '#d8fff0';
+      g.fillRect(6, -3, 3, 6);
+      g.restore();
+      return;
+    }
+
+    if (weapon === 'shotgun') {
+      g.fillStyle = '#6b4a2a';
+      g.fillRect(2, -2, 9, 4);
+      g.fillStyle = '#cfd6e8';
+      g.fillRect(11, -2.5, 16, 2.2);
+      g.fillRect(11, 0.3, 16, 2.2);
+      return;
+    }
+
     if (weapon === 'pistol') {
       g.fillStyle = '#dfe6ff';
       g.fillRect(6, -1.5, 13, 3.5);

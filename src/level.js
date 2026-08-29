@@ -48,8 +48,11 @@ export const ENTITY = {
   DOG: 2,       /* зарезервировано */
   W_BAT: 3,     /* бита на полу */
   W_PISTOL: 4,  /* пистолет на полу */
-  W_SHOTGUN: 5, /* зарезервировано */
+  W_SHOTGUN: 5, /* обрез на полу */
   CIVIL: 6,     /* зарезервировано */
+  W_KNIFE: 7,   /* нож на полу */
+  W_PIPE: 8,    /* труба на полу */
+  W_BOTTLE: 9,  /* бутылка на полу */
 
   /* Безоружный боец: дерётся приёмами, оружия не роняет. */
   BRAWLER: 10,
@@ -71,6 +74,10 @@ const CHAR_ENTITY = {
   s: ENTITY.SHOOTER,
   b: ENTITY.W_BAT,
   p: ENTITY.W_PISTOL,
+  g: ENTITY.W_SHOTGUN,
+  n: ENTITY.W_KNIFE,
+  r: ENTITY.W_PIPE,
+  o: ENTITY.W_BOTTLE,
   k: ENTITY.BRAWLER,
 };
 

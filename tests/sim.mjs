@@ -633,6 +633,70 @@ function nearest(world) {
     `осталось ${victim.hp} из ${BARE_HP}`);
 }
 
+/* --- H3. Оружие: шесть предметов, шесть разных решений --- */
+{
+  /*
+   * Оружие в этой игре — не цифры урона: убивает с касания любое. Разница
+   * в другом — насколько близко надо подойти, сколько ждёшь между
+   * ударами, кто это услышит и останется ли оружие в руках. Проверяется
+   * именно это, потому что именно из этого складывается выбор.
+   */
+  const melee = ['bat', 'knife', 'pipe', 'bottle'];
+
+  const strike = (weapon) => {
+    const world = createWorld(CAMPAIGN[0]);
+    const player = world.player;
+    const enemy = world.enemies.find((e) => !e.weapon);
+    for (const other of world.enemies) if (other !== enemy) other.alive = false;
+    player.weapon = weapon;
+    player.cooldown = 0;
+    enemy.state = 'idle';
+    enemy.cooldown = 99;
+    enemy.angle = Math.PI;
+    enemy.vx = 0;
+    enemy.vy = 0;
+    player.x = enemy.x - 20;
+    player.y = enemy.y;
+    player.angle = 0;
+    update(world, DT, { ...idle, aimAngle: 0, attack: true });
+    return { world, player, enemy };
+  };
+
+  const failed = melee.filter((weapon) => strike(weapon).enemy.alive);
+  check('любое оружие ближнего боя кладёт с касания', failed.length === 0,
+    failed.length ? `не убило: ${failed.join(', ')}` : 'бита, нож, труба, бутылка');
+
+  const broken = strike('bottle');
+  check('бутылка ломается после удара', broken.player.weapon === 'fists',
+    `в руках ${broken.player.weapon}`);
+
+  const kept = strike('bat');
+  check('бита не ломается', kept.player.weapon === 'bat');
+
+  check('нож тише биты, обрез громче всех',
+    WEAPONS.knife.noise < WEAPONS.bat.noise && WEAPONS.shotgun.noise > WEAPONS.pistol.noise,
+    `нож ${WEAPONS.knife.noise}, бита ${WEAPONS.bat.noise}, обрез ${WEAPONS.shotgun.noise}`);
+
+  check('труба длиннее биты, но медленнее',
+    WEAPONS.pipe.reach > WEAPONS.bat.reach && WEAPONS.pipe.cooldown > WEAPONS.bat.cooldown,
+    `труба ${WEAPONS.pipe.reach}/${WEAPONS.pipe.cooldown}, бита ${WEAPONS.bat.reach}/${WEAPONS.bat.cooldown}`);
+
+  /* Обрез: два патрона и веер из пяти дробин за выстрел. */
+  const gun = createWorld(CAMPAIGN[0]);
+  gun.player.weapon = 'shotgun';
+  gun.player.ammo = WEAPONS.shotgun.clip;
+  gun.player.cooldown = 0;
+  update(gun, DT, { ...idle, aimAngle: 0, attack: true });
+  check('обрез бьёт веером', gun.bullets.length === WEAPONS.shotgun.pellets,
+    `дробин ${gun.bullets.length}`);
+  check('в обрезе два патрона', WEAPONS.shotgun.clip === 2 && gun.player.ammo === 1,
+    `осталось ${gun.player.ammo}`);
+
+  /* Разлёт должен быть именно разлётом: дробины идут под разными углами. */
+  const angles = new Set(gun.bullets.map((b) => Math.atan2(b.vy, b.vx).toFixed(3)));
+  check('дробины расходятся', angles.size === gun.bullets.length, `разных углов ${angles.size}`);
+}
+
 /* --- I. Рукопашная: простые правила --- */
 {
   /*

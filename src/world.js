@@ -128,9 +128,51 @@ export const WEAPONS = {
     id: 'bat', name: 'БИТА', kind: 'melee',
     reach: 40, arc: 2.0, cooldown: 0.18, lethal: true, noise: 110,
   },
+  /*
+   * Нож.
+   *
+   * Самое короткое оружие в игре и самое тихое: убивает с касания, но
+   * подойти надо вплотную, а размах такой, что промах почти не наказуем —
+   * рука возвращается быстрее, чем противник успевает ответить. Шум ниже,
+   * чем от кулака: нож — это про то, чтобы этаж не проснулся.
+   */
+  knife: {
+    id: 'knife', name: 'НОЖ', kind: 'melee',
+    reach: 26, arc: 1.4, cooldown: 0.12, lethal: true, noise: 45,
+  },
+
+  /*
+   * Труба. Длиннее биты и медленнее её: бьёт первой в любом размене, но
+   * между ударами успевают подойти двое.
+   */
+  pipe: {
+    id: 'pipe', name: 'ТРУБА', kind: 'melee',
+    reach: 46, arc: 2.1, cooldown: 0.28, lethal: true, noise: 130,
+  },
+
+  /*
+   * Бутылка. Одноразовая: после удара остаётся горлышко, и в руках снова
+   * кулаки. Зато её выгодно бросать — в полёте она валит с ног, как любое
+   * брошенное, и потом уже не мешает.
+   */
+  bottle: {
+    id: 'bottle', name: 'БУТЫЛКА', kind: 'melee',
+    reach: 30, arc: 1.8, cooldown: 0.16, lethal: true, noise: 90, breaks: true,
+  },
+
   pistol: {
     id: 'pistol', name: 'ПИСТОЛЕТ', kind: 'gun',
     cooldown: 0.16, clip: 12, speed: 900, spread: 0.03, noise: 460,
+  },
+
+  /*
+   * Обрез. Два патрона, пять дробин веером: в упор снимает всё перед
+   * собой, с десяти шагов почти безвреден. И слышно его на весь этаж —
+   * после первого выстрела прятаться уже не с кем.
+   */
+  shotgun: {
+    id: 'shotgun', name: 'ОБРЕЗ', kind: 'gun',
+    cooldown: 0.62, clip: 2, speed: 760, spread: 0.16, pellets: 5, noise: 700,
   },
 };
 
@@ -397,8 +439,15 @@ export function createWorld(level) {
       continue;
     }
 
-    if (entity.type === 3) world.pickups.push({ weapon: 'bat', x, y, angle: rand(0, 6.28), ammo: 0, vx: 0, vy: 0, spin: 0 });
-    if (entity.type === 4) world.pickups.push({ weapon: 'pistol', x, y, angle: rand(0, 6.28), ammo: WEAPONS.pistol.clip, vx: 0, vy: 0, spin: 0 });
+    /* Оружие на полу. Тип из уровня — имя из таблицы: добавить новое
+       оружие значит дописать строку здесь и в словаре уровня. */
+    const dropped = { 3: 'bat', 4: 'pistol', 5: 'shotgun', 7: 'knife', 8: 'pipe', 9: 'bottle' }[entity.type];
+    if (dropped) {
+      world.pickups.push({
+        weapon: dropped, x, y, angle: rand(0, 6.28),
+        ammo: WEAPONS[dropped].clip || 0, vx: 0, vy: 0, spin: 0,
+      });
+    }
   }
 
   world.flow = buildFlowField(world, world.player.x, world.player.y);
@@ -410,19 +459,44 @@ export function createWorld(level) {
    ОРУЖИЕ
    ========================================================= */
 
+/* Оружие рассыпалось в руках: осколки, шум и снова кулаки. */
+function breakWeapon(world, holder, angle, from) {
+  spark(world, holder.x + Math.cos(angle) * 14, holder.y + Math.sin(angle) * 14,
+    angle, 2.2, 9, '#a8f2ff', 200);
+  emitNoise(world, holder.x, holder.y, 150, 'break');
+  holder.weapon = 'fists';
+  holder.ammo = 0;
+  if (from === 'player') world.events.push({ type: 'broke' });
+}
+
 function fireGun(world, shooter, from) {
   const weapon = WEAPONS[shooter.weapon];
-  const angle = shooter.angle + rand(-weapon.spread, weapon.spread) * (from === 'enemy' ? 2.4 : 1);
 
-  world.bullets.push({
-    x: shooter.x + Math.cos(shooter.angle) * 14,
-    y: shooter.y + Math.sin(shooter.angle) * 14,
-    vx: Math.cos(angle) * weapon.speed,
-    vy: Math.sin(angle) * weapon.speed,
-    from,
-    weapon: shooter.weapon,
-    life: BULLET_LIFE,
-  });
+  /*
+   * Ствол выпускает одну пулю или веер дробин. Разлёт у обреза не
+   * случайная добавка к углу, а сам смысл оружия: в упор веер накрывает
+   * всё перед стволом, с десяти шагов дробины расходятся так, что мимо
+   * проходят все пять.
+   */
+  const pellets = weapon.pellets || 1;
+  for (let i = 0; i < pellets; i += 1) {
+    const spread = pellets > 1
+      ? (i / (pellets - 1) - 0.5) * weapon.spread * 2 + rand(-0.02, 0.02)
+      : rand(-weapon.spread, weapon.spread);
+    const angle = shooter.angle + spread * (from === 'enemy' ? 2.4 : 1);
+
+    world.bullets.push({
+      x: shooter.x + Math.cos(shooter.angle) * 14,
+      y: shooter.y + Math.sin(shooter.angle) * 14,
+      vx: Math.cos(angle) * weapon.speed,
+      vy: Math.sin(angle) * weapon.speed,
+      from,
+      weapon: shooter.weapon,
+      life: BULLET_LIFE,
+    });
+  }
+
+  const angle = shooter.angle;
 
   shooter.ammo -= 1;
   shooter.cooldown = weapon.cooldown;
@@ -780,6 +854,10 @@ function swingMelee(world, attacker, from) {
         silent,
         beat: Boolean(attacker.onBeat),
       });
+
+      /* Бутылка живёт один удар: дальше в руках кулаки, и это решение —
+         бить ею или беречь для броска — принимается за полсекунды. */
+      if (weapon.breaks) breakWeapon(world, attacker, toTarget, from);
     } else {
       knockDown(world, target, toTarget);
     }
