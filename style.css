@@ -487,49 +487,9 @@ html, body {
 /* Кнопки нужны только пальцу: мышь получает тот же ввод с клавиатуры. */
 @media (pointer: coarse) {
   .pad { display: grid; }
-  /*
- * Экран смерти. Ни кнопок, ни статистики, ни затемнения на пол-экрана:
- * всё это заставляет читать, а чтение выбивает из ритма. Игрок и так
- * знает, что произошло, — ему нужно только разрешение начать заново.
- */
-.dead {
-  position: fixed;
-  inset: 0;
-  z-index: 15;
-  display: grid;
-  place-content: center;
-  gap: 4px;
-  background: radial-gradient(circle at 50% 50%, #ff2d9508, #14020a66 70%);
-  text-align: center;
-  pointer-events: none;
-  animation: deadIn .18s ease-out;
-}
 
-.dead[hidden] { display: none; }
-
-.dead b {
-  font: 900 56px/1 system-ui, -apple-system, sans-serif;
-  letter-spacing: .06em;
-  color: #fff;
-  text-shadow:
-    0 0 18px #ff2d95,
-    4px 4px 0 #14020a,
-    -2px -2px 0 #14020a;
-}
-
-.dead span {
-  font: 800 11px var(--mono);
-  letter-spacing: .28em;
-  color: #ffd7ec;
-  text-shadow: 2px 2px 0 #14020a;
-}
-
-@keyframes deadIn {
-  from { opacity: 0; transform: scale(1.06); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.toast { bottom: max(30vh, 190px); }
+  /* Тост поднят выше: внизу лежит палец, который ведёт. */
+  .toast { bottom: max(30vh, 190px); }
 }
 
 
@@ -559,18 +519,17 @@ html, body {
 .veil-logo[hidden] { display: none; }
 
 .veil-card {
-  /* Фон карточки — картинкой, если она есть: путь один и тот же, нет файла
-     — браузер просто не покажет слой, и останется прежний градиент. */
-  background-image: url('assets/ui/veil.png');
-  background-size: cover;
-  background-position: center;
-  background-blend-mode: luminosity;
   width: min(430px, 100%);
   max-height: 92vh;
   overflow: auto;
   padding: 24px 22px 20px;
   border: 2px solid var(--acid);
-  background: linear-gradient(150deg, #1a0b28, #0a1512);
+  /* Картинка и градиент одним слоёным фоном. Раньше картинка стояла
+     отдельным свойством выше, а сокращённая запись ниже её затирала —
+     файл грузился и не показывался. */
+  background:
+    linear-gradient(150deg, #1a0b28ee, #0a1512ee),
+    url('assets/ui/veil.png') center / cover;
   box-shadow: 10px 10px 0 #05040a, 0 0 44px #76ff9f22;
 }
 

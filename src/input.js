@@ -86,6 +86,14 @@ export function createInput(surface) {
 
   surface.addEventListener('touchstart', (event) => {
     touchMode = true;
+    /*
+     * Каждое новое касание отмечается отдельно от стиков. Нужно это
+     * ровно в одном месте — на экране смерти, где с клавиатуры годится
+     * любая кнопка, а пальцу до сих пор приходилось искать «БИТЬ».
+     * Палец, уже лежащий на стике, событие не шлёт, так что случайного
+     * перезапуска в момент гибели не будет.
+     */
+    pressed.add('Tap');
     const rect = surface.getBoundingClientRect();
 
     for (const touch of event.changedTouches) {

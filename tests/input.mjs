@@ -119,5 +119,14 @@ fire(fakeButton.listeners, 'touchend', {});
 state = input.read();
 check('отпущенная кнопка отпускает удар', state.attackHeld === false);
 
+/* --- касание как «любая клавиша» на экране смерти --- */
+input.endFrame();
+fire(surfaceListeners, 'touchstart', {
+  changedTouches: [{ identifier: 7, clientX: 300, clientY: 300 }],
+});
+check('касание отмечается отдельно от стиков', input.tookKey('Tap') === true);
+check('второй раз то же касание не считается', input.tookKey('Tap') === false);
+fire(surfaceListeners, 'touchend', { changedTouches: [{ identifier: 7 }] });
+
 console.log(failures ? `\nПРОВАЛЕНО: ${failures}` : '\nввод работает');
 process.exit(failures ? 1 : 0);

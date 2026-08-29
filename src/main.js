@@ -245,8 +245,12 @@ function setToast(text, seconds = 2) {
   toastTimer = seconds;
 }
 
+function byFinger() {
+  return input.isTouch() || matchMedia('(pointer: coarse)').matches;
+}
+
 function controlsHint() {
-  return input.isTouch() || matchMedia('(pointer: coarse)').matches
+  return byFinger()
     ? 'ЛЕВЫЙ ПАЛЕЦ ВЕДЁТ. ПРАВЫЙ ЦЕЛИТ И БЬЁТ САМ, КОГДА ЦЕЛЬ ПОД ПРИЦЕЛОМ. КНОПКИ СПРАВА — ВЗЯТЬ И БРОСИТЬ.'
     : 'WASD — ИДТИ, СТРЕЛКИ ИЛИ ЛКМ — БИТЬ, ПРОБЕЛ — ВЗЯТЬ ИЛИ БРОСИТЬ ОРУЖИЕ. ГОЛЫМИ РУКАМИ КЛАДЁШЬ С ДВУХ УДАРОВ, ОРУЖИЕМ — С ОДНОГО, И ТЕБЯ ТОЖЕ. R — ЗАНОВО.';
 }
@@ -303,6 +307,9 @@ function callScreen() {
  */
 function deathScreen() {
   scene = 'dead';
+  /* Подпись под словом «ЗАНОВО» — про то, что у игрока в руках. */
+  const how = ui.dead.querySelector('span');
+  if (how) how.textContent = byFinger() ? 'КОСНИСЬ ЭКРАНА' : 'ПРОБЕЛ ИЛИ R';
   ui.dead.hidden = false;
 }
 
@@ -620,9 +627,10 @@ function step(now) {
   /* R перезапускает этаж откуда угодно, кроме экрана звонка. */
   const restart = input.tookKey('KeyR');
   if (scene === 'dead' || scene === 'dying') {
-    /* После смерти перезапускает всё, что под рукой: R, пробел, удар. */
+    /* После смерти перезапускает всё, что под рукой: R, пробел, удар,
+       а на телефоне — касание в любом месте экрана. */
     if (restart || input.tookKey('Fire') || input.tookKey('Space')
-      || input.tookKey('ArrowLeft') || input.tookKey('KeyJ')) {
+      || input.tookKey('Tap') || ATTACK_KEYS.some((code) => input.tookKey(code))) {
       startLevel(level, { silent: true });
     }
   } else if (restart && (scene === 'play' || scene === 'pause')) {
