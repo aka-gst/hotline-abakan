@@ -139,6 +139,76 @@
           1
         ]
       }
+    },
+    "snow": {
+      "image": "tiles-snow.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "floor_worn": [
+          2,
+          0
+        ],
+        "floor_stain": [
+          3,
+          0
+        ],
+        "wall_body": [
+          4,
+          0
+        ],
+        "wall_top": [
+          5,
+          0
+        ],
+        "wall_edge": [
+          6,
+          0
+        ],
+        "wall_corner": [
+          7,
+          0
+        ],
+        "door_h": [
+          0,
+          1
+        ],
+        "door_v": [
+          1,
+          1
+        ],
+        "table": [
+          2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
+          1
+        ]
+      }
     }
   },
   "actors": {
@@ -313,7 +383,10 @@
     "knife": "items/knife.png",
     "pipe": "items/pipe.png",
     "bottle": "items/bottle.png",
-    "shotgun": "items/shotgun.png"
+    "shotgun": "items/shotgun.png",
+    "shovel": "items/shovel.png",
+    "crowbar": "items/crowbar.png",
+    "hockey": "items/hockey.png"
   },
   "moves": {
     "hand": {
@@ -342,6 +415,27 @@
       "image": "fx/blood.png",
       "frames": 6,
       "size": 96
+    },
+    "breath": {
+      "image": "fx/breath.png",
+      "frames": 6,
+      "size": 64
+    },
+    "snowdust": {
+      "image": "fx/snowdust.png",
+      "frames": 6,
+      "size": 64
+    },
+    "footprints": "fx/footprints.png",
+    "blood_snow": {
+      "image": "fx/blood_snow.png",
+      "frames": 6,
+      "size": 96
+    },
+    "icecrack": {
+      "image": "fx/icecrack.png",
+      "frames": 4,
+      "size": 64
     }
   },
   "ui": {

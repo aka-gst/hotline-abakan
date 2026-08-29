@@ -61,6 +61,21 @@ export const THEMES = [
     glass: '#a8f2ff',
     haze: '#2ce8ff',
   },
+  {
+    name: 'двор',
+    floor: '#8fa3b8',
+    floorAlt: '#9db0c4',
+    grout: '#5f7183',
+    wall: '#1a222c',
+    wallTop: '#2b3644',
+    wallEdge: '#2ce8ff',
+    door: '#3f5a70',
+    rug: '#6b7f92',
+    table: '#3d4a58',
+    tableEdge: '#a8d8ff',
+    glass: '#cfe8ff',
+    haze: '#7ec8ff',
+  }
 ];
 
 

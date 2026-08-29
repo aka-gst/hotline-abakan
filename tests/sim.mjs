@@ -488,6 +488,66 @@ function nearest(world) {
   check('этажей в кампании больше одного', CAMPAIGN.length >= 4, shape.join(' · '));
 }
 
+/* --- H0b. Лёд во дворе --- */
+{
+  /*
+   * Двор зимой — единственный этаж, где меняется не расстановка, а
+   * физика: разгон и торможение втрое дольше. Проверяется числами, потому
+   * что «скользко» на глаз — это либо незаметно, либо неуправляемо, и
+   * между этими двумя состояниями узкая полоса.
+   *
+   * Скользит только игрок: скользящий враг превращает бой в лотерею.
+   */
+  const runUp = (title) => {
+    const level = CAMPAIGN.find((l) => l.title === title);
+    const world = createWorld(level);
+    let frames = 0;
+    while (Math.hypot(world.player.vx, world.player.vy) < 280 && frames < 300) {
+      update(world, DT, { ...idle, moveX: 1 });
+      frames += 1;
+    }
+    return frames;
+  };
+
+  const stop = (title) => {
+    const level = CAMPAIGN.find((l) => l.title === title);
+    const world = createWorld(level);
+    for (let i = 0; i < 40; i += 1) update(world, DT, { ...idle, moveX: 1 });
+    let frames = 0;
+    while (Math.hypot(world.player.vx, world.player.vy) > 20 && frames < 300) {
+      update(world, DT, { ...idle });
+      frames += 1;
+    }
+    return frames;
+  };
+
+  const room = runUp('БАР «ЛЕДЯНОЙ»');
+  const yard = runUp('ДВОР');
+  check('во дворе разгоняешься дольше', yard > room * 2,
+    `в комнате ${room} кадров, во дворе ${yard}`);
+
+  const roomStop = stop('БАР «ЛЕДЯНОЙ»');
+  const yardStop = stop('ДВОР');
+  check('во дворе дольше тормозишь', yardStop > roomStop * 2,
+    `в комнате ${roomStop} кадров, во дворе ${yardStop}`);
+
+  /* Но не настолько, чтобы этаж стал непроходимым. */
+  check('лёд остаётся играбельным', yard < 30 && yardStop < 30,
+    `разгон ${yard}, торможение ${yardStop}`);
+
+  /* Враги на льду не скользят. */
+  const level = CAMPAIGN.find((l) => l.title === 'ДВОР');
+  const world = createWorld(level);
+  const enemy = world.enemies[0];
+  enemy.state = 'chase';
+  let seen = 0;
+  for (let i = 0; i < 60; i += 1) {
+    update(world, DT, { ...idle });
+    seen = Math.max(seen, Math.hypot(enemy.vx, enemy.vy));
+  }
+  check('противники по льду ходят как обычно', seen > 100, `быстрее всего ${Math.round(seen)}`);
+}
+
 /* --- H1. Этажи, которые собрались сами --- */
 {
   /*

@@ -151,7 +151,7 @@ export function createAssets(base = 'assets/') {
     return true;
   }
 
-  const THEME_KEYS = ['bar', 'server'];
+  const THEME_KEYS = ['bar', 'server', 'snow'];
 
   return {
     boot,

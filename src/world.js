@@ -208,6 +208,15 @@ export const WEAPONS = {
  */
 const PLAYER_SPEED = 290;
 const PLAYER_ACCEL = 4600;
+/*
+ * Доля обычного сцепления на снегу.
+ *
+ * Лёд — свойство темы, а не отдельного этажа: тема попадает в код уровня,
+ * а лишний флаг потребовал бы менять формат и ломать старые ссылки.
+ * Двор (тема 2) скользкий, комнаты — нет.
+ */
+const ICE_GRIP = 0.32;
+const SLIPPERY_THEMES = new Set([2]);
 const ENEMY_WALK = 76;
 const ENEMY_RUN = 168;
 const DOWN_TIME = 1.7;
@@ -1106,8 +1115,19 @@ function updatePlayer(world, dt, intent) {
   const targetX = wish > 0.001 ? (intent.moveX / Math.max(1, wish)) * PLAYER_SPEED : 0;
   const targetY = wish > 0.001 ? (intent.moveY / Math.max(1, wish)) * PLAYER_SPEED : 0;
 
-  player.vx += clamp(targetX - player.vx, -PLAYER_ACCEL * dt, PLAYER_ACCEL * dt);
-  player.vy += clamp(targetY - player.vy, -PLAYER_ACCEL * dt, PLAYER_ACCEL * dt);
+  /*
+   * Лёд.
+   *
+   * На снежном этаже разгон и торможение втрое дольше: с места не
+   * рвануть, на бегу не остановиться, в дверь входишь юзом. Это не
+   * украшение темы, а её смысл — те же комнаты играются иначе, потому
+   * что теперь ошибку не отыграть одним нажатием. Скользит только игрок:
+   * скользящий враг превращает бой в лотерею.
+   */
+  const grip = SLIPPERY_THEMES.has(world.level.theme) ? ICE_GRIP : 1;
+  const accel = PLAYER_ACCEL * grip;
+  player.vx += clamp(targetX - player.vx, -accel * dt, accel * dt);
+  player.vy += clamp(targetY - player.vy, -accel * dt, accel * dt);
 
   moveBody(world, player, player.vx * dt, player.vy * dt);
 
