@@ -547,8 +547,21 @@ html, body {
  * Показания в этой ориентации жмутся в одну узкую строку.
  */
 @media (pointer: coarse) and (max-height: 430px) {
-  .pad-big { width: 64px; height: 64px; font-size: 10px; }
-  .pad-small { width: 54px; height: 54px; }
+  /*
+   * Кнопки в строку, а не в столбик. В столбик они съедали всю правую
+   * сторону: сверху «НА САЙТ», под ним «ЗВУК», под ним три круга — пять
+   * предметов в одной колонке на триста двадцать пикселей высоты, и всё
+   * это поверх угла, откуда выходят враги. В строку они занимают то,
+   * чего в этой ориентации много: ширину.
+   */
+  .pad {
+    grid-auto-flow: column;
+    align-items: end;
+    gap: 12px;
+  }
+
+  .pad-big { width: 62px; height: 62px; font-size: 10px; }
+  .pad-small { width: 50px; height: 50px; font-size: 8px; }
   .pad-key { opacity: .62; }
   .pad-key:active, .pad-key.is-held { opacity: 1; }
 
@@ -556,6 +569,12 @@ html, body {
   .hud-slot { padding: 4px 7px; }
   .hud-slot b { font-size: 10px; }
   .weapon-icon { width: 30px; height: 15px; margin-bottom: 2px; }
+
+  /* Во время боя «НА САЙТ» и «ЗВУК» не нужны, а место занимают то самое,
+     где стоят кнопки. Возвращаются они на любом экране между попытками —
+     там до них и тянутся. */
+  body[data-scene="play"] .game-home-menu,
+  body[data-scene="play"] .mute { display: none; }
 }
 
 

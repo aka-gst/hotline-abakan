@@ -584,6 +584,15 @@ function damageBare(world, victim, striker, move, from) {
   victim.vx += Math.cos(angle) * 130;
   victim.vy += Math.sin(angle) * 130;
 
+  /*
+   * Отметка попадания. Её ставило только оружие, а рукопашная — нет,
+   * поэтому дуга удара кулаком всегда рисовалась как промах: тонкая
+   * линия вместо белого сектора. Отсюда и «непонятно, как мы дерёмся» —
+   * игра показывала промах на каждом попадании.
+   */
+  striker.swingHit = 0.2;
+  striker.beatHit = beat ? 0.2 : 0;
+
   world.fx.hitstop = Math.max(world.fx.hitstop, beat ? 0.08 : 0.05);
   world.fx.shake = Math.max(world.fx.shake, beat ? 9 : 6);
   world.events.push({ type: 'bare', move: move.id, from, left: victim.hp, beat });
@@ -1051,6 +1060,7 @@ function updatePlayer(world, dt, intent) {
   player.swing = Math.max(0, player.swing - dt);
   tickMove(world, player, dt, 'player');
   player.swingHit = Math.max(0, (player.swingHit || 0) - dt);
+  player.beatHit = Math.max(0, (player.beatHit || 0) - dt);
   player.flash = Math.max(0, (player.flash || 0) - dt);
 
   /*

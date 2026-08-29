@@ -361,11 +361,31 @@ export function createRenderer(canvas, assets = null) {
        */
       g.save();
       g.strokeStyle = palette.neon;
-      g.globalAlpha = 0.55;
-      g.lineWidth = 1.5;
+      g.globalAlpha = opts.mine ? 0.95 : 0.5;
+      g.lineWidth = opts.mine ? 2.5 : 1.5;
       g.beginPath();
       g.ellipse(x, y, BODY + 3, BODY + 2.5, 0, 0, 6.29);
       g.stroke();
+
+      /*
+       * Клин перед своим.
+       *
+       * «Кто из них я» — первый вопрос, который задаёт человек, впервые
+       * открывший игру, и по одинаковым кольцам на него не ответить.
+       * У своего кольцо ярче и толще, а перед ним лежит сплошной клин:
+       * он же показывает, куда смотришь, а значит, куда придётся удар.
+       * У чужих ни того, ни другого — им хватает цвета кромки.
+       */
+      if (opts.mine) {
+        g.globalAlpha = 0.9;
+        g.fillStyle = palette.neon;
+        g.beginPath();
+        g.moveTo(x + Math.cos(angle) * (BODY + 12), y + Math.sin(angle) * (BODY + 12));
+        g.lineTo(x + Math.cos(angle + 0.5) * (BODY + 3), y + Math.sin(angle + 0.5) * (BODY + 3));
+        g.lineTo(x + Math.cos(angle - 0.5) * (BODY + 3), y + Math.sin(angle - 0.5) * (BODY + 3));
+        g.closePath();
+        g.fill();
+      }
       g.restore();
 
       /*
@@ -1027,11 +1047,16 @@ export function createRenderer(canvas, assets = null) {
         g.fillText(move.short, enemy.x - 4.5, enemy.y - BODY - 13);
       }
 
-      /* Стойкость безоружного: три деления, по одному за попадание. */
+      /*
+       * Сколько ударов держит безоружный. Деления были, но еле заметные —
+       * серые полоски в три пикселя под телом; на вопрос «почему он не
+       * умер» они не отвечали. Теперь потраченное горит розовым, как
+       * кровь, а оставшееся — белым, и оба заметно крупнее.
+       */
       if (!enemy.weapon && enemy.hp !== undefined && enemy.hp < BARE_HP) {
         for (let i = 0; i < BARE_HP; i += 1) {
-          g.fillStyle = i < enemy.hp ? '#ffffff' : 'rgba(255,255,255,.18)';
-          g.fillRect(enemy.x - 9 + i * 7, enemy.y + BODY + 4, 5, 3);
+          g.fillStyle = i < enemy.hp ? '#ffffff' : '#ff2d95';
+          g.fillRect(enemy.x - 10 + i * 9, enemy.y + BODY + 5, 7, 4);
         }
       }
 
@@ -1076,6 +1101,7 @@ export function createRenderer(canvas, assets = null) {
       state: actorState(player),
       phase: actorPhase(player),
       time: world.time,
+      mine: true,
       /* Замах отклоняет корпус назад: вес приёма видно по всему телу. */
       lean: player.moveStart > 0 ? -2 : 0,
     });
@@ -1097,11 +1123,14 @@ export function createRenderer(canvas, assets = null) {
       g.moveTo(player.x, player.y);
       g.arc(player.x, player.y, weapon.reach, from, to);
       g.closePath();
-      g.fillStyle = hit ? `rgba(255,255,255,${player.swingHit * 1.6})` : 'rgba(255,255,255,.07)';
+      /* Удар в долю светится кислотным, обычный — белым: по цвету дуги
+         видно, попал ли ты в такт, не глядя на счёт. */
+      const ink = player.beatHit > 0 ? '118,255,159' : '255,255,255';
+      g.fillStyle = hit ? `rgba(${ink},${player.swingHit * 1.6})` : 'rgba(255,255,255,.07)';
       g.fill();
 
       g.strokeStyle = hit
-        ? `rgba(255,255,255,${Math.min(0.95, player.swingHit * 5)})`
+        ? `rgba(${ink},${Math.min(0.95, player.swingHit * 5)})`
         : `rgba(255,255,255,${player.swing * 3})`;
       g.lineWidth = hit ? 4 : 2;
       g.beginPath();

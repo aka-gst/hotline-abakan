@@ -582,6 +582,37 @@ function nearest(world) {
     return { count, alive: enemy.alive };
   };
 
+  /*
+   * Отметка попадания. Дуга удара рисуется по ней: есть отметка — белый
+   * сектор, нет — тонкая линия промаха. Рукопашная её не ставила, и
+   * каждое попадание кулаком выглядело промахом.
+   */
+  {
+    const world = createWorld(CAMPAIGN[0]);
+    const player = world.player;
+    const enemy = world.enemies.find((e) => !e.weapon);
+    player.weapon = 'fists';
+    enemy.state = 'idle';
+    enemy.cooldown = 99;
+    enemy.vx = 0;
+    enemy.vy = 0;
+    /* Лицом к игроку: удар со спины уходит другим путём, мимо расчёта
+       урона, и отметку не ставит — там своя, тихая смерть. */
+    enemy.angle = Math.PI;
+    player.x = enemy.x - 20;
+    player.y = enemy.y;
+    player.angle = 0;
+    update(world, DT, { ...idle, aimAngle: 0, attack: true });
+    for (let i = 0; i < 12 && !player.swingHit; i += 1) {
+      enemy.angle = Math.PI;
+      enemy.vx = 0;
+      enemy.vy = 0;
+      update(world, DT, { ...idle, aimAngle: 0 });
+    }
+    check('попадание кулаком помечено как попадание', player.swingHit > 0,
+      `отметка ${player.swingHit}`);
+  }
+
   const offBeat = hits({ beat: false });
   check('мимо доли безоружного кладут два удара', !offBeat.alive && offBeat.count === 2,
     `${offBeat.count} удара, жив=${offBeat.alive}`);
