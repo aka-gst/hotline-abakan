@@ -611,7 +611,12 @@ function nearest(world) {
    */
   const COUNTER = { hand: 'grab', kick: 'hand', grab: 'kick' };
 
-  const duelOut = (plan, runs = 30) => {
+  /*
+   * Выборка нарочно большая: приём противника выбирается случайно, и на
+   * тридцати боях разброс перекрывал саму разницу между тактиками —
+   * проверка падала раз в десять прогонов, ничего при этом не находя.
+   */
+  const duelOut = (plan, runs = 120) => {
     let wins = 0;
     for (let i = 0; i < runs; i += 1) {
       const world = createWorld(CAMPAIGN[0]);
@@ -640,12 +645,12 @@ function nearest(world) {
 
   const blind = duelOut(() => 'hand');
   const punish = duelOut((e) => (e.moveStart > 0 ? COUNTER[e.move] : null));
-  check('чтение замаха выгоднее слепого напора', punish > blind + 3,
-    `по кругу ${punish}/30 против ${blind}/30 вслепую`);
+  check('чтение замаха выгоднее слепого напора', punish >= blind + 10,
+    `по кругу ${punish}/120 против ${blind}/120 вслепую`);
 
   const intoGuard = duelOut((e) => (e.moveStart > 0 ? COUNTER[e.move] : (e.guard ? COUNTER[e.guard] : 'hand')));
   check('бить в стойку — не тактика', intoGuard <= punish,
-    `в стойку ${intoGuard}/30 против ${punish}/30 по замаху`);
+    `в стойку ${intoGuard}/120 против ${punish}/120 по замаху`);
 }
 
 /* --- F. Производительность шага --- */
