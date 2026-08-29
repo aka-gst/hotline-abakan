@@ -8,6 +8,7 @@
 
 import { CAMPAIGN } from './levels.js';
 import { generateLevel } from './generate.js';
+import { readFloors, saveFloor, markResult } from './floors.js';
 import { decode, encode } from './level.js';
 import { createWorld, update, WEAPONS, MOVES, BARE_HP, beatNow } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
@@ -304,6 +305,24 @@ function typeScore(final) {
 }
 
 /*
+ * Свои этажи на карточке звонка.
+ *
+ * Пройденный случайный этаж запоминается сам — вместе с зерном и лучшим
+ * результатом. Список показывается прямо здесь: не меню, а строка фишек,
+ * по которой видно, что накопилось, и в которую можно ткнуть.
+ */
+function savedFloorsHtml() {
+  const list = readFloors();
+  if (!list.length) return '';
+  const chips = list.map((floor) => {
+    const key = floor.seed ? `data-seed="${floor.seed}"` : `data-code="${floor.code}"`;
+    const mark = floor.score ? ` · ${floor.score}` : '';
+    return `<button type="button" class="floor-chip" ${key}>${floor.title}${mark}</button>`;
+  }).join('');
+  return `<span class="floor-list">МОИ ЭТАЖИ${chips}</span>`;
+}
+
+/*
  * Случайный этаж.
  *
  * Встроенных этажей мало, а повод открыть игру завтра нужен. Зерно берётся
@@ -393,7 +412,8 @@ function callScreen() {
     title: level.title,
     text: level.call,
     stats: `<span>${controlsHint()}</span>`
-      + (best ? `<span>ЛУЧШЕЕ ЗДЕСЬ: ${best.total} · РАНГ ${best.rank} · ${formatTime(best.time)}</span>` : ''),
+      + (best ? `<span>ЛУЧШЕЕ ЗДЕСЬ: ${best.total} · РАНГ ${best.rank} · ${formatTime(best.time)}</span>` : '')
+      + savedFloorsHtml(),
     action: 'ВЗЯТЬ КЛЮЧИ',
     second: 'СЛУЧАЙНЫЙ ЭТАЖ',
   });
@@ -424,12 +444,23 @@ function hasNextFloor() {
 }
 
 
+/* Сданный этаж остаётся себе: зерно для собранного, код для нарисованного. */
+function rememberFloor(final) {
+  const entry = level.seed
+    ? { seed: level.seed, title: level.title }
+    : { code: levelCode, title: level.title };
+  if (!custom && !level.seed) return;    /* этажи кампании и так на месте */
+  saveFloor(entry);
+  if (final) markResult(entry, final.total, final.rank, world ? world.time : 0);
+}
+
 function clearScreen() {
   scene = 'clear';
 
   result = score.finish(world);
   const record = writeBest(levelCode, result, world.time);
   const more = hasNextFloor();
+  rememberFloor(result);
 
   /* Вызов принят или нет — это первое, что должно быть видно на экране. */
   const duel = compare({ time: world.time, score: result.total }, challenge);
@@ -843,6 +874,22 @@ ui.veilAction.addEventListener('click', (event) => {
   else if (scene === 'dead') startLevel(level, { silent: true });
   else if (scene === 'clear') { attempts = 0; startLevel(level, { silent: true }); }
   else if (scene === 'pause') { hideVeil(); scene = 'play'; }
+});
+
+/* Фишка «моего этажа» на карточке звонка: один клик — и играем его. */
+ui.veilStats.addEventListener('click', (event) => {
+  const chip = event.target.closest('.floor-chip');
+  if (!chip) return;
+  audio.sfx('ui');
+  const seed = Number(chip.dataset.seed || 0);
+  const code = chip.dataset.code || '';
+  const next = seed ? generateLevel(seed) : decode(code);
+  if (!next) return;
+  custom = true;
+  attempts = 0;
+  level = next;
+  levelCode = encode(level);
+  callScreen();
 });
 
 ui.veilSecond.addEventListener('click', (event) => {

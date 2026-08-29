@@ -778,6 +778,29 @@ html, body {
 
 .veil-action:hover, .veil-second:hover { background: #1e5c3d; color: #fff; }
 
+
+/* Свои этажи: строка фишек, а не меню. Меню заставляет выбирать, строка —
+   вспоминать: «вот тот, где я выбил ранг B». */
+.floor-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.floor-chip {
+  padding: 5px 9px;
+  border: 1px solid #ffffff26;
+  background: #0d0a18;
+  color: var(--paper);
+  font: 700 9px var(--mono);
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.floor-chip:hover { border-color: var(--acid); color: var(--acid); }
+
 .veil-code {
   margin: 0 0 16px;
   padding: 12px;

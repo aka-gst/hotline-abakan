@@ -455,6 +455,39 @@ function nearest(world) {
     quiet.world.enemies.filter((e) => e.alive && e.state !== 'idle').length === 0);
 }
 
+/* --- H0. Каждый нарисованный этаж проходим --- */
+{
+  /*
+   * Этажи рисуются руками, картинкой из символов, и ошибиться в них проще
+   * всего: одна лишняя решётка запирает комнату, и половина этажа
+   * становится недостижимой. Глазами такое не видно — карта выглядит
+   * нормально, а бот упирается в стену.
+   */
+  let sealed = 0;
+  let ambush = 0;
+  const shape = [];
+
+  for (const level of CAMPAIGN) {
+    const world = createWorld(level);
+    const exitIndex = level.tiles.findIndex((t) => t === 4);
+    const field = buildFlowField(world,
+      ((exitIndex % level.w) + 0.5) * TILE_SIZE,
+      (Math.floor(exitIndex / level.w) + 0.5) * TILE_SIZE);
+    const reach = (x, y) => field[Math.floor(y / TILE_SIZE) * world.w + Math.floor(x / TILE_SIZE)] >= 0;
+
+    if (!reach(world.player.x, world.player.y)) sealed += 1;
+    for (const enemy of world.enemies) {
+      if (!reach(enemy.x, enemy.y)) sealed += 1;
+      if (Math.hypot(enemy.x - world.player.x, enemy.y - world.player.y) < TILE_SIZE * 5) ambush += 1;
+    }
+    shape.push(`${level.title}: ${world.enemies.length}`);
+  }
+
+  check('все этажи кампании проходимы', sealed === 0, `запертых мест ${sealed}`);
+  check('ни на одном этаже не ждут у входа', ambush === 0, `засад ${ambush}`);
+  check('этажей в кампании больше одного', CAMPAIGN.length >= 4, shape.join(' · '));
+}
+
 /* --- H1. Этажи, которые собрались сами --- */
 {
   /*
