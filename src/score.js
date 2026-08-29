@@ -48,6 +48,7 @@ export function createScore(level, attempts = 1) {
     kills: 0,
     executions: 0,
     silent: 0,
+    inRhythm: 0,
     crossfire: 0,
     shots: 0,
     weapons: new Set(),
@@ -68,6 +69,7 @@ export function createScore(level, attempts = 1) {
 
     if (event.execution) state.executions += 1;
     if (event.silent) state.silent += 1;
+    if (event.beat) state.inRhythm += 1;
     if (event.weapon) state.weapons.add(event.weapon);
 
     state.score += (event.execution ? EXECUTION : KILL) * state.combo;
@@ -119,6 +121,9 @@ export function createScore(level, attempts = 1) {
     if (state.executions > 0) add('ДОБИТО ЛЕЖАЧИХ ' + state.executions, state.executions * 100);
     /* Тихая работа стоит дороже громкой: она требует терпения, а не темпа. */
     if (state.silent > 0) add('СО СПИНЫ ' + state.silent, state.silent * 150);
+    /* Убийство в долю музыки — единственный бонус, который начисляется за
+       то, как игрок двигался, а не за то, что он выбрал. */
+    if (state.inRhythm > 0) add('В ТАКТ ' + state.inRhythm, state.inRhythm * 200);
     if (state.crossfire > 0) add('ЧУЖИМИ РУКАМИ ' + state.crossfire, 0);
     if (state.attempts === 1) add('С ПЕРВОГО РАЗА', 500);
 

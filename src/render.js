@@ -466,9 +466,18 @@ export function createRenderer(canvas, assets = null) {
    * секунды, игрок обязан читать не только чужой выбор, но и то, на какой
    * стадии этот выбор находится.
    */
+  /* Есть ли у персонажей листы анимации: если есть, удар уже нарисован в
+     кадрах, и вторая рука поверх спрайта — та самая «рука сзади». */
+  function sheetsInUse() {
+    if (!assets || !assets.ready) return false;
+    const art = assets.actor('player');
+    return !!(art && art.rows);
+  }
+
   function limbs(g, ent, palette) {
     const id = ent.move;
     if (!id || !MOVES[id]) return;
+    if (sheetsInUse()) return;
 
     const move = MOVES[id];
     const winding = (ent.moveStart || 0) > 0;
@@ -639,8 +648,28 @@ export function createRenderer(canvas, assets = null) {
     let camY = view.y;
     const worldW = world.w * TILE_SIZE;
     const worldH = world.h * TILE_SIZE;
-    camX = worldW <= halfW * 2 ? worldW / 2 : Math.max(halfW, Math.min(worldW - halfW, camX));
-    camY = worldH <= halfH * 2 ? worldH / 2 : Math.max(halfH, Math.min(worldH - halfH, camY));
+    /*
+     * Куда смотрит камера.
+     *
+     * По той оси, где этаж длиннее экрана, камера идёт за игроком и
+     * упирается в стены — иначе за краем видна пустота. По той, где этаж
+     * короче, она стоит посередине этажа: игрока туда не поставить при
+     * всём желании, а пустоту лучше поделить поровну сверху и снизу, где
+     * её закрывают показания и кнопки, чем свалить всю под ноги.
+     *
+     * Пальцем добавляется поблажка: у самых стен камера отпускает игрока
+     * не сразу, и он держится к центру ближе, чем позволяет упор. Без неё
+     * на телефоне персонаж уезжал в угол кадра, а смотреть приходилось в
+     * противоположный.
+     */
+    const slack = view.centred ? 0.35 : 0;
+    const follow = (cam, half, size) => {
+      if (size <= half * 2) return size / 2;
+      const give = half * slack;
+      return Math.max(half - give, Math.min(size - half + give, cam));
+    };
+    camX = follow(camX, halfW, worldW);
+    camY = follow(camY, halfH, worldH);
 
     /* Короткий наезд на попадании: кадр «клюёт» вперёд и возвращается. */
     /* Наезд на попадании и короткий вдох на долю музыки. */
@@ -1018,6 +1047,26 @@ export function createRenderer(canvas, assets = null) {
   function drawPlayer(g, world) {
     const player = world.player;
     if (!player.alive) return;
+
+    /*
+     * Метроном вокруг игрока.
+     *
+     * Правило про удар в долю бесполезно, если долю не видно: на слух её
+     * ловит не всякий, а со звуком, выключенным в метро, — никто. Кольцо
+     * расходится от игрока на каждую долю и гаснет ровно за то время,
+     * пока удар ещё считается попавшим в неё. Промахнуться мимо ритма,
+     * глядя на кольцо, уже трудно.
+     */
+    if (world.fx.beat > 0.02) {
+      g.save();
+      g.strokeStyle = '#76ff9f';
+      g.globalAlpha = world.fx.beat * 0.5;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(player.x, player.y, BODY + 4 + (1 - world.fx.beat) * 16, 0, 6.29);
+      g.stroke();
+      g.restore();
+    }
 
     body(g, player.x, player.y, player.angle, PALETTE.player, {
       weapon: player.weapon === 'fists' ? null : player.weapon,

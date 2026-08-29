@@ -1,0 +1,15 @@
+{
+  "name": "ОДИН УДАР",
+  "short_name": "ОДИН УДАР",
+  "description": "Кислотный киберпанк с видом сверху: умирают с одного касания все, включая тебя.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0a0710",
+  "theme_color": "#0a0710",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

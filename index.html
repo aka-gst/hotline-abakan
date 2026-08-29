@@ -9,6 +9,21 @@
     content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
   >
 
+  <!--
+    Полный экран на телефоне.
+
+    В Safari на айфоне вкладки в горизонтальном режиме убрать со страницы
+    нельзя: полноэкранного режима для элемента там нет вовсе. Единственный
+    способ получить весь экран — добавить игру на домашний экран: тогда
+    она открывается отдельным окном, без адресной строки и вкладок. Эти
+    три меты и манифест ровно за это и отвечают.
+  -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ОДИН УДАР">
+  <link rel="manifest" href="app.webmanifest">
+  <link rel="apple-touch-icon" href="icon.png">
+
   <meta name="theme-color" content="#08070d">
   <meta name="description" content="ОДИН УДАР — быстрый top-down экшен в браузере: с одного удара умирают все, оружие подбирается с пола. Мышь и клавиатура или два пальца на телефоне.">
 

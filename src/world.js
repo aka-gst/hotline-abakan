@@ -85,6 +85,40 @@ export const MOVE_ORDER = ['hand', 'kick', 'grab'];
 /* Сколько попаданий держит безоружный — и игрок, и противник. */
 export const BARE_HP = 2;
 
+/*
+ * Доля.
+ *
+ * Музыка в этой игре не фон, а метроном: 108 ударов в минуту, кик на
+ * каждой доле. Если бить в долю, удар выходит вдвое сильнее — безоружного
+ * кладёт с одного касания, а откат укорачивается, и следующий удар
+ * успевает в следующую долю. Так игрок, попавший в такт, идёт по этажу
+ * не останавливаясь; сбившийся дерётся как раньше.
+ *
+ * Метроном идёт и с выключенным звуком: правило не должно зависеть от
+ * того, слышно музыку или нет. Пока доли приходят из аудио, считаем от
+ * последней; замолчали — считаем от нуля мира по тому же периоду.
+ */
+export const BEAT_PERIOD = 60 / 108;
+export const BEAT_WINDOW = 0.13;
+export const BEAT_COOLDOWN = 0.6;
+
+export function beatNow(world) {
+  world.fx.beat = 1;
+  world.beatAt = world.time;
+}
+
+/* Сколько секунд до ближайшей доли — в любую сторону. */
+export function beatOff(world) {
+  const heard = world.beatAt !== undefined && world.time - world.beatAt < BEAT_PERIOD * 3;
+  const since = heard ? world.time - world.beatAt : world.time;
+  const phase = ((since % BEAT_PERIOD) + BEAT_PERIOD) % BEAT_PERIOD;
+  return Math.min(phase, BEAT_PERIOD - phase);
+}
+
+export function inRhythm(world) {
+  return beatOff(world) <= BEAT_WINDOW;
+}
+
 export const WEAPONS = {
   fists: {
     id: 'fists', name: 'КУЛАКИ', kind: 'melee',
@@ -523,16 +557,36 @@ function bareStrike(world, attacker, target, move, from) {
 function damageBare(world, victim, striker, move, from) {
   const angle = Math.atan2(victim.y - striker.y, victim.x - striker.x);
 
-  victim.hp = (victim.hp === undefined ? BARE_HP : victim.hp) - (move.damage || 1);
+  /*
+   * Бьющий в долю бьёт первым.
+   *
+   * Без этого правила ритм не окупался: ждать долю значит не бить, а
+   * дуэли выигрывал тот, кто молотит без остановки — 12 из 12 в прогоне
+   * против 10 у играющего по музыке. Сила удара этого не перевешивала:
+   * за период бьющий как попало успевает дважды и набирает те же два
+   * очка урона, что и один удар в долю.
+   *
+   * Поэтому доля даёт не только силу, но и право первого удара: пока
+   * идёт замах, начатый в долю, чужой кулак не доходит. От пули это не
+   * спасает — иначе ритм превращался бы в неуязвимость.
+   */
+  if (victim.onBeat && victim.swing > 0) {
+    pop(world, victim.x, victim.y, 10, '118,255,159');
+    world.events.push({ type: 'beatpass', from });
+    return;
+  }
+
+  const beat = !!striker.onBeat;
+  victim.hp = (victim.hp === undefined ? BARE_HP : victim.hp) - (beat ? BARE_HP : (move.damage || 1));
   victim.move = null;
   victim.moveLeft = 0;
   victim.hitFlash = 0.14;
   victim.vx += Math.cos(angle) * 130;
   victim.vy += Math.sin(angle) * 130;
 
-  world.fx.hitstop = Math.max(world.fx.hitstop, 0.05);
-  world.fx.shake = Math.max(world.fx.shake, 6);
-  world.events.push({ type: 'bare', move: move.id, from, left: victim.hp });
+  world.fx.hitstop = Math.max(world.fx.hitstop, beat ? 0.08 : 0.05);
+  world.fx.shake = Math.max(world.fx.shake, beat ? 9 : 6);
+  world.events.push({ type: 'bare', move: move.id, from, left: victim.hp, beat });
 
   if (victim === world.player) {
     if (victim.hp <= 0) killPlayer(world, angle);
@@ -541,7 +595,7 @@ function damageBare(world, victim, striker, move, from) {
   }
 
   if (victim.hp <= 0) {
-    killEnemy(world, victim, angle, 'bare', { by: from, weapon: 'bare' });
+    killEnemy(world, victim, angle, 'bare', { by: from, weapon: 'bare', beat });
     return;
   }
 
@@ -571,12 +625,16 @@ function bareAttack(world, attacker, moveId, from) {
    * разница характеров: рукой отвечают, ногой наказывают, бросок
    * приходится заказывать заранее.
    */
+  /* В долю попадает нажатие, а не попадание: игрок стучит по музыке, а
+     не подгадывает момент, когда кулак долетит. */
+  attacker.onBeat = from === 'player' && inRhythm(world);
+
   attacker.move = move.id;
   attacker.moveStart = move.startup;
   attacker.moveLeft = move.startup + 0.16;
   attacker.moveFrom = from;
-  attacker.cooldown = move.startup + move.recovery;
-  world.events.push({ type: 'wind', move: move.id, from });
+  attacker.cooldown = (move.startup + move.recovery) * (attacker.onBeat ? BEAT_COOLDOWN : 1);
+  world.events.push({ type: 'wind', move: move.id, from, beat: attacker.onBeat });
 }
 
 
@@ -655,7 +713,10 @@ function tickMove(world, ent, dt, from) {
 
 function swingMelee(world, attacker, from) {
   const weapon = WEAPONS[attacker.weapon];
-  attacker.cooldown = weapon.cooldown;
+  /* Оружие и так убивает с касания, поэтому доля даёт не силу, а темп:
+     замахнувшийся по музыке успевает к следующей доле. */
+  attacker.onBeat = from === 'player' && inRhythm(world);
+  attacker.cooldown = weapon.cooldown * (attacker.onBeat ? BEAT_COOLDOWN : 1);
   attacker.swing = 0.16;
 
   const candidates = from === 'player'
@@ -708,6 +769,7 @@ function swingMelee(world, attacker, from) {
         weapon: attacker.weapon,
         execution: target.downed > 0,
         silent,
+        beat: Boolean(attacker.onBeat),
       });
     } else {
       knockDown(world, target, toTarget);
@@ -789,6 +851,7 @@ export function killEnemy(world, enemy, angle, cause, source = {}) {
     weapon: source.weapon || null,
     execution: Boolean(source.execution),
     silent: Boolean(source.silent),
+    beat: Boolean(source.beat),
   });
 
   if (world.kills >= world.total && !world.exitOpen) {
@@ -886,6 +949,20 @@ export function update(world, dt, intent) {
   world.fx.shake = Math.max(0, world.fx.shake - dt * 26);
   world.fx.flash = Math.max(0, world.fx.flash - dt * 3.2);
   world.fx.punch = Math.max(0, world.fx.punch - dt * 4);
+  /*
+   * Пульс доли. Пока музыка играет, доли приходят из неё; с выключенным
+   * звуком метроном идёт сам — иначе правило про удар в долю работает, а
+   * увидеть долю нельзя, и игра начинает врать глазами.
+   */
+  const heard = world.beatAt !== undefined && world.time - world.beatAt < BEAT_PERIOD * 3;
+  if (!heard) {
+    const tick = Math.floor(world.time / BEAT_PERIOD);
+    if (tick !== world.beatTick) {
+      world.beatTick = tick;
+      world.fx.beat = 1;
+    }
+  }
+
   world.fx.beat = Math.max(0, world.fx.beat - dt * 5);
 
   if (world.state === 'play') world.time += dt;

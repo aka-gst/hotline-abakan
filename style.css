@@ -445,15 +445,22 @@ html, body {
  * же месте отбирает у него прицел.
  */
 .pad {
+  /*
+   * Кнопки внизу, где и лежит палец.
+   *
+   * Они висели посередине правого края — там, куда удобно тянуться
+   * мышью, а не большим пальцем. Палец на телефоне живёт внизу: там же
+   * и стик, который ведёт. «БИТЬ» стоит ниже всех, в самом углу, потому
+   * что нажимают её чаще остальных вместе взятых.
+   */
   position: fixed;
   right: max(10px, env(safe-area-inset-right));
-  top: 50%;
+  bottom: max(14px, calc(env(safe-area-inset-bottom) + 14px));
   z-index: 9;
   display: none;
   grid-auto-flow: row;
   gap: 9px;
   justify-items: end;
-  transform: translateY(-50%);
 }
 
 .pad-key {
@@ -471,8 +478,18 @@ html, body {
   height: 62px;
 }
 
+/* Доля музыки на кнопке удара: короткая вспышка, которую видно краем
+   глаза, не отвлекаясь от этажа. */
+.pad-key.on-beat {
+  animation: padBeat .18s ease-out;
+}
+
+@keyframes padBeat {
+  from { box-shadow: 0 0 0 0 #76ff9f88; border-color: var(--acid); }
+  to { box-shadow: 0 0 0 12px #76ff9f00; }
+}
+
 .pad-big {
-  order: -1;
   width: 76px;
   height: 76px;
   border-width: 2px;
@@ -505,7 +522,18 @@ html, body {
    посреди драки выключает музыку — поэтому в этой ориентации кнопки
    меньше, а зазор больше. */
 @media (pointer: coarse) and (max-height: 430px) {
-  .pad-big { width: 64px; height: 64px; font-size: 10px; }
+  /* Доля музыки на кнопке удара: короткая вспышка, которую видно краем
+   глаза, не отвлекаясь от этажа. */
+.pad-key.on-beat {
+  animation: padBeat .18s ease-out;
+}
+
+@keyframes padBeat {
+  from { box-shadow: 0 0 0 0 #76ff9f88; border-color: var(--acid); }
+  to { box-shadow: 0 0 0 12px #76ff9f00; }
+}
+
+.pad-big { width: 64px; height: 64px; font-size: 10px; }
   .pad-small { width: 54px; height: 54px; }
 }
 

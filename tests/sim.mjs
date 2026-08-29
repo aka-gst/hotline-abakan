@@ -13,7 +13,7 @@
  */
 
 import { CAMPAIGN } from '../src/levels.js';
-import { createWorld, update, WEAPONS, MOVES, BARE_HP, TILE_SIZE, hasSight, tileIndex } from '../src/world.js';
+import { createWorld, update, WEAPONS, MOVES, BARE_HP, BEAT_PERIOD, BEAT_WINDOW, inRhythm, TILE_SIZE, hasSight, tileIndex } from '../src/world.js';
 import { createScore } from '../src/score.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap } from '../src/aim.js';
 import { buildFlowField } from '../src/ai.js';
@@ -454,6 +454,93 @@ function nearest(world) {
     quiet.world.enemies.filter((e) => e.alive && e.state !== 'idle').length === 0);
 }
 
+/* --- H2. Ритм решает бой --- */
+{
+  /*
+   * Обещание игры: попал в такт — почти гарантированно победил.
+   *
+   * Меряется не «бот против бота»: боту нечего бояться, он молотит без
+   * остановки и в дуэли один на один выигрывает просто потому, что не
+   * ждёт. Меряется само правило, из трёх частей, — каждая проверяется
+   * отдельно, потому что вместе они и дают обещанное.
+   */
+  const setup = ({ beat }) => {
+    const world = createWorld(CAMPAIGN[0]);
+    const player = world.player;
+    const enemy = world.enemies.find((e) => !e.weapon);
+    for (const other of world.enemies) if (other !== enemy) other.alive = false;
+    player.weapon = 'fists';
+    enemy.state = 'idle';
+    enemy.cooldown = 99;
+    enemy.vx = 0;
+    enemy.vy = 0;
+    player.x = enemy.x - 20;
+    player.y = enemy.y;
+    player.angle = 0;
+    world.beatAt = beat ? world.time : world.time - BEAT_PERIOD / 2;
+    return { world, player, enemy };
+  };
+
+  /* 1. Сила: в долю — с одного, мимо — с двух. Проверено ниже, в разделе I. */
+
+  /* 2. Темп: откат после удара в долю короче, и следующий успевает в
+     следующую долю. */
+  const beatRun = setup({ beat: true });
+  update(beatRun.world, DT, { ...idle, aimAngle: 0, attack: true });
+  const beatCooldown = beatRun.player.cooldown;
+
+  const plainRun = setup({ beat: false });
+  update(plainRun.world, DT, { ...idle, aimAngle: 0, attack: true });
+  const plainCooldown = plainRun.player.cooldown;
+
+  check('удар в долю откатывается быстрее', beatCooldown < plainCooldown * 0.7,
+    `${beatCooldown.toFixed(2)} против ${plainCooldown.toFixed(2)}`);
+  check('следующий удар успевает в следующую долю', beatCooldown < BEAT_PERIOD,
+    `откат ${beatCooldown.toFixed(2)} при доле ${BEAT_PERIOD.toFixed(2)}`);
+
+  /* 3. Право первого удара: замах, начатый в долю, чужим кулаком не сбить. */
+  const trade = (beat) => {
+    const { world, player, enemy } = setup({ beat });
+    update(world, DT, { ...idle, aimAngle: 0, attack: true });
+    /* Противник бьёт в тот же момент, когда игрок уже замахнулся. */
+    for (let i = 0; i < 20 && player.alive && enemy.alive; i += 1) {
+      enemy.cooldown = 0;
+      enemy.angle = Math.PI;
+      enemy.x = player.x + 20;
+      enemy.y = player.y;
+      enemy.vx = 0;
+      enemy.vy = 0;
+      update(world, DT, { ...idle, aimAngle: 0 });
+    }
+    return { playerAlive: player.alive, enemyAlive: enemy.alive };
+  };
+
+  const inBeat = trade(true);
+  check('замах в долю доводится до конца', inBeat.playerAlive && !inBeat.enemyAlive,
+    `игрок ${inBeat.playerAlive ? 'жив' : 'убит'}, противник ${inBeat.enemyAlive ? 'жив' : 'убит'}`);
+
+  /* 4. Доля — только игроку: иначе враги начнут убивать с одного касания
+     и этаж станет непроходимым. */
+  const enemyBeat = createWorld(CAMPAIGN[0]);
+  enemyBeat.beatAt = enemyBeat.time;
+  const brawler = enemyBeat.enemies.find((e) => !e.weapon);
+  const victim = enemyBeat.player;
+  victim.hp = BARE_HP;
+  victim.x = brawler.x - 20;
+  victim.y = brawler.y;
+  brawler.angle = Math.PI;
+  brawler.cooldown = 0;
+  for (let i = 0; i < 40 && victim.hp === BARE_HP; i += 1) {
+    brawler.vx = 0;
+    brawler.vy = 0;
+    victim.x = brawler.x - 20;
+    victim.y = brawler.y;
+    update(enemyBeat, DT, { ...idle, aimAngle: 0 });
+  }
+  check('удар врага в долю бьёт как обычный', victim.hp === BARE_HP - 1,
+    `осталось ${victim.hp} из ${BARE_HP}`);
+}
+
 /* --- I. Рукопашная: простые правила --- */
 {
   /*
@@ -462,7 +549,7 @@ function nearest(world) {
    * в общей свалке оказались нечитаемы и остались только для дуэлянтов
    * (флаг duel) — это задел под боссов.
    */
-  const hits = (moveId) => {
+  const hits = ({ beat }) => {
     const world = createWorld(CAMPAIGN[0]);
     const player = world.player;
     const enemy = world.enemies.find((e) => !e.weapon);
@@ -481,7 +568,10 @@ function nearest(world) {
       player.x = enemy.x - 20;
       player.y = enemy.y;
       player.angle = 0;
-      update(world, DT, { ...idle, aimAngle: 0, attack: true, move: moveId });
+      /* Доля ставится вручную: либо нажатие приходится ровно на неё,
+         либо ровно между двумя. */
+      world.beatAt = beat ? world.time : world.time - BEAT_PERIOD / 2;
+      update(world, DT, { ...idle, aimAngle: 0, attack: true });
       for (let k = 0; k < 24; k += 1) {
         enemy.vx = 0;
         enemy.vy = 0;
@@ -492,9 +582,13 @@ function nearest(world) {
     return { count, alive: enemy.alive };
   };
 
-  const byHand = hits('hand');
-  check('безоружного кладут два удара', !byHand.alive && byHand.count === 2,
-    `${byHand.count} удара, жив=${byHand.alive}`);
+  const offBeat = hits({ beat: false });
+  check('мимо доли безоружного кладут два удара', !offBeat.alive && offBeat.count === 2,
+    `${offBeat.count} удара, жив=${offBeat.alive}`);
+
+  const onBeat = hits({ beat: true });
+  check('в долю — с одного', !onBeat.alive && onBeat.count === 1,
+    `${onBeat.count} удара, жив=${onBeat.alive}`);
 
   /* Оружие возвращает главное правило игры. */
   const armed = createWorld(CAMPAIGN[0]);

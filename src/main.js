@@ -251,8 +251,8 @@ function byFinger() {
 
 function controlsHint() {
   return byFinger()
-    ? 'ЛЕВЫЙ ПАЛЕЦ ВЕДЁТ. ПРАВЫЙ ЦЕЛИТ И БЬЁТ САМ, КОГДА ЦЕЛЬ ПОД ПРИЦЕЛОМ. КНОПКИ СПРАВА — ВЗЯТЬ И БРОСИТЬ.'
-    : 'WASD — ИДТИ, СТРЕЛКИ ИЛИ ЛКМ — БИТЬ, ПРОБЕЛ — ВЗЯТЬ ИЛИ БРОСИТЬ ОРУЖИЕ. ГОЛЫМИ РУКАМИ КЛАДЁШЬ С ДВУХ УДАРОВ, ОРУЖИЕМ — С ОДНОГО, И ТЕБЯ ТОЖЕ. R — ЗАНОВО.';
+    ? 'ЛЕВЫЙ ПАЛЕЦ ВЕДЁТ. ПРАВЫЙ ЦЕЛИТ И БЬЁТ САМ. БЕЙ В ТАКТ МУЗЫКИ — КОЛЬЦО ВОКРУГ ТЕБЯ И ЕСТЬ ДОЛЯ: В НЕЁ КЛАДЁШЬ С ОДНОГО.'
+    : 'WASD — ИДТИ, СТРЕЛКИ ИЛИ ЛКМ — БИТЬ, ПРОБЕЛ — ВЗЯТЬ ИЛИ БРОСИТЬ ОРУЖИЕ. БЕЙ В ТАКТ МУЗЫКИ — КЛАДЁШЬ С ОДНОГО УДАРА И БЬЁШЬ ПЕРВЫМ. МИМО ТАКТА НУЖНО ДВА. R — ЗАНОВО.';
 }
 
 
@@ -641,9 +641,18 @@ function step(now) {
     /* Камера смотрит чуть вперёд по прицелу и догоняет быстро: на этой
        скорости мягкое слежение отстаёт и игрок упирается в край кадра. */
     const player = world.player;
-    const lead = 60;
+    /*
+     * Упреждение камеры — роскошь широкого экрана. На телефоне оно уводит
+     * игрока к краю, а он там и так оказывается: этаж помещается целиком,
+     * камера упирается в его границы, и персонаж гуляет по всему кадру.
+     * Пальцем в таком режиме играть нельзя — смотришь то в один угол, то
+     * в другой. Поэтому на сенсоре камера держит игрока по центру и
+     * выходит за края этажа, показывая темноту.
+     */
+    const lead = byFinger() ? 0 : 60;
     view.x += (player.x + Math.cos(player.angle) * lead - view.x) * Math.min(1, dt * 13);
     view.y += (player.y + Math.sin(player.angle) * lead - view.y) * Math.min(1, dt * 13);
+    view.centred = byFinger();
     lastView = renderer.draw(world, view);
 
     /*
@@ -709,7 +718,7 @@ ui.veilAction.addEventListener('click', (event) => {
   /* Снимаем фокус: иначе пробел в бою повторно нажимал бы эту кнопку. */
   event.currentTarget.blur();
 
-  if (scene === 'call') startLevel(level);
+  if (scene === 'call') { startLevel(level); offerHomeScreen(); }
   else if (scene === 'dead') startLevel(level, { silent: true });
   else if (scene === 'clear') { attempts = 0; startLevel(level, { silent: true }); }
   else if (scene === 'pause') { hideVeil(); scene = 'play'; }
@@ -763,16 +772,66 @@ input.bindButton($('btnAttack'), 'attack');
 input.bindButton($('btnPickup'), 'pickup');
 input.bindButton($('btnThrow'), 'throw');
 
+/*
+ * Уход из вкладки и возвращение.
+ *
+ * Уходя, игра встаёт на паузу. Возвращаясь — будит звук: телефон
+ * усыпляет AudioContext, пока приложение свёрнуто, и сам он не
+ * просыпается. Раньше подписка на первое касание снималась после первого
+ * же жеста, поэтому «вышел — зашёл — звука нет» и не лечилось ничем,
+ * кроме перезагрузки страницы.
+ */
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && scene === 'play') pauseScreen();
+  if (document.hidden) {
+    if (scene === 'play') pauseScreen();
+    return;
+  }
+  audio.unlock();
 });
 
-/* Первое касание экрана разрешает звук: без жеста браузер его не пустит. */
-/* Кадр дышит в такт музыки: подписываемся один раз при старте. */
-audio.onBeat(() => { if (world) world.fx.beat = 1; });
+/*
+ * Подсказка про домашний экран.
+ *
+ * В Safari на айфоне вкладки в горизонтальном режиме съедают верх экрана,
+ * и убрать их со страницы нельзя — полноэкранного режима для элемента там
+ * нет. Зато игра, добавленная на домашний экран, открывается отдельным
+ * окном без адресной строки. Говорим об этом один раз и только тем, кому
+ * это доступно: в отдельном окне подсказка уже не нужна.
+ */
+function offerHomeScreen() {
+  const standalone = window.navigator.standalone === true
+    || matchMedia('(display-mode: fullscreen)').matches
+    || matchMedia('(display-mode: standalone)').matches;
+  const apple = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (standalone || !apple) return;
+  try {
+    if (localStorage.getItem('udar-home') === '1') return;
+    localStorage.setItem('udar-home', '1');
+  } catch (error) {
+    return;                       /* приватный режим — молчим */
+  }
+  setToast('ПОДЕЛИТЬСЯ → НА ЭКРАН «ДОМОЙ»: ИГРА ОТКРОЕТСЯ ВО ВЕСЬ ЭКРАН', 6);
+}
 
-const wake = () => { audio.unlock(); window.removeEventListener('pointerdown', wake); };
-window.addEventListener('pointerdown', wake);
+/* Возврат из фонового режима на iOS приходит и этим событием — оно
+   срабатывает, когда страницу достали из кэша «назад/вперёд». */
+window.addEventListener('pageshow', () => audio.unlock());
+
+/* Кадр дышит в такт музыки: подписываемся один раз при старте. */
+audio.onBeat(() => {
+  if (world) beatNow(world);
+  /* Кнопка удара мигает вместе с долей: на телефоне палец держат на ней,
+     и метроном должен быть там же, где взгляд. */
+  const key = $('btnAttack');
+  if (!key) return;
+  key.classList.remove('on-beat');
+  void key.offsetWidth;
+  key.classList.add('on-beat');
+});
+
+/* Касание разрешает звук. Подписка не снимается: браузер может усыпить
+   контекст в любой момент, а разбудить его можно только по жесту. */
+window.addEventListener('pointerdown', () => audio.unlock());
 
 /*
  * Диагностический вход. Через него проверяется то, что не проверить
