@@ -12,40 +12,60 @@
           1,
           0
         ],
-        "wall_body": [
+        "floor_worn": [
           2,
           0
         ],
-        "wall_top": [
+        "floor_stain": [
           3,
           0
         ],
-        "wall_edge": [
+        "wall_body": [
           4,
           0
         ],
-        "door_h": [
+        "wall_top": [
           5,
           0
         ],
-        "door_v": [
+        "wall_edge": [
           6,
           0
         ],
-        "table": [
+        "wall_corner": [
           7,
           0
         ],
-        "glass": [
+        "door_h": [
           0,
           1
         ],
-        "rug": [
+        "door_v": [
           1,
           1
         ],
-        "exit": [
+        "table": [
           2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
           1
         ]
       }
@@ -62,53 +82,234 @@
           1,
           0
         ],
-        "wall_body": [
+        "floor_worn": [
           2,
           0
         ],
-        "wall_top": [
+        "floor_stain": [
           3,
           0
         ],
-        "wall_edge": [
+        "wall_body": [
           4,
           0
         ],
-        "door_h": [
+        "wall_top": [
           5,
           0
         ],
-        "door_v": [
+        "wall_edge": [
           6,
           0
         ],
-        "table": [
+        "wall_corner": [
           7,
           0
         ],
-        "glass": [
+        "door_h": [
           0,
           1
         ],
-        "rug": [
+        "door_v": [
           1,
           1
         ],
-        "exit": [
+        "table": [
           2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
           1
         ]
       }
     }
   },
   "actors": {
-    "player": "actors/player.png",
-    "player_bat": "actors/player_bat.png",
-    "player_pistol": "actors/player_pistol.png",
-    "brawler": "actors/brawler.png",
-    "thug_bat": "actors/thug_bat.png",
-    "shooter_pistol": "actors/shooter_pistol.png",
-    "corpse": "actors/corpse.png"
+    "player": {
+      "image": "actors/player.png",
+      "size": 64,
+      "cols": 6,
+      "rows": {
+        "idle": [
+          0,
+          2
+        ],
+        "walk": [
+          1,
+          4
+        ],
+        "attack": [
+          2,
+          3
+        ],
+        "attack2": [
+          3,
+          3
+        ],
+        "death": [
+          4,
+          4
+        ]
+      }
+    },
+    "player_bat": {
+      "image": "actors/player_bat.png",
+      "size": 64,
+      "cols": 6,
+      "rows": {
+        "idle": [
+          0,
+          2
+        ],
+        "walk": [
+          1,
+          4
+        ],
+        "attack": [
+          2,
+          3
+        ],
+        "attack2": [
+          3,
+          3
+        ],
+        "death": [
+          4,
+          4
+        ]
+      }
+    },
+    "player_pistol": {
+      "image": "actors/player_pistol.png",
+      "size": 64,
+      "cols": 6,
+      "rows": {
+        "idle": [
+          0,
+          2
+        ],
+        "walk": [
+          1,
+          4
+        ],
+        "attack": [
+          2,
+          3
+        ],
+        "attack2": [
+          3,
+          3
+        ],
+        "death": [
+          4,
+          4
+        ]
+      }
+    },
+    "brawler": {
+      "image": "actors/brawler.png",
+      "size": 64,
+      "cols": 6,
+      "rows": {
+        "idle": [
+          0,
+          2
+        ],
+        "walk": [
+          1,
+          4
+        ],
+        "attack": [
+          2,
+          3
+        ],
+        "attack2": [
+          3,
+          3
+        ],
+        "death": [
+          4,
+          4
+        ]
+      }
+    },
+    "thug_bat": {
+      "image": "actors/thug_bat.png",
+      "size": 64,
+      "cols": 6,
+      "rows": {
+        "idle": [
+          0,
+          2
+        ],
+        "walk": [
+          1,
+          4
+        ],
+        "attack": [
+          2,
+          3
+        ],
+        "attack2": [
+          3,
+          3
+        ],
+        "death": [
+          4,
+          4
+        ]
+      }
+    },
+    "shooter_pistol": {
+      "image": "actors/shooter_pistol.png",
+      "size": 64,
+      "cols": 6,
+      "rows": {
+        "idle": [
+          0,
+          2
+        ],
+        "walk": [
+          1,
+          4
+        ],
+        "attack": [
+          2,
+          3
+        ],
+        "attack2": [
+          3,
+          3
+        ],
+        "death": [
+          4,
+          4
+        ]
+      }
+    },
+    "corpse": "actors/corpse.png",
+    "corpse_pool": "actors/corpse_pool.png"
+  },
+  "items": {
+    "bat": "items/bat.png",
+    "pistol": "items/pistol.png"
   },
   "moves": {
     "hand": {
@@ -127,28 +328,21 @@
       "size": 128
     }
   },
-  "items": {
-    "bat": "items/bat.png",
-    "pistol": "items/pistol.png"
-  },
   "fx": {
     "pop": "fx/pop.png",
+    "muzzle": "fx/muzzle.png",
+    "spark": "fx/spark.png",
+    "casing": "fx/casing.png",
+    "clash": "fx/clash.png",
     "blood": {
       "image": "fx/blood.png",
       "frames": 6,
       "size": 96
-    },
-    "muzzle": "fx/muzzle.png",
-    "spark": "fx/spark.png",
-    "clash": "fx/clash.png",
-    "casing": "fx/casing.png"
+    }
   },
   "ui": {
     "logo": "ui/logo.svg",
     "veil": "ui/veil.png",
-    "og": "ui/og.png",
-    "move_hand": "ui/move-hand.png",
-    "move_kick": "ui/move-kick.png",
-    "move_grab": "ui/move-grab.png"
+    "og": "ui/og.png"
   }
 }

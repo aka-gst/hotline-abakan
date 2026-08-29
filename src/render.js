@@ -350,11 +350,38 @@ export function createRenderer(canvas, assets = null) {
       g.fill();
       g.restore();
 
+      /*
+       * Кольцо под спрайтом.
+       *
+       * Присланные персонажи нарисованы честно, но тёмным по тёмному, и
+       * на тридцати двух пикселях посреди фиолетового пола сливаются в
+       * пятно. Раньше роль читалась неоновой кромкой, которую рисовал
+       * код; теперь кромка ушла под спрайт и осталась ровно тем, чем
+       * была, — ответом на вопрос «кто это» раньше, чем разберёшь оружие.
+       */
+      g.save();
+      g.strokeStyle = palette.neon;
+      g.globalAlpha = 0.55;
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.ellipse(x, y, BODY + 3, BODY + 2.5, 0, 0, 6.29);
+      g.stroke();
+      g.restore();
+
+      /*
+       * Спрайт крупнее хитбокса, и так и задумано: тело сталкивается
+       * кругом радиусом BODY, а рисунок занимает всю клетку листа. Если
+       * подгонять картинку под столкновения, персонаж превращается в
+       * точку; если наоборот — дерёшься на расстоянии вытянутой руки, а
+       * выглядит будто вплотную. Сорок пикселей — то, на чём и фигура
+       * читается, и промах не выглядит попаданием.
+       */
+      const SIZE = 40;
       if (art.rows) {
         const frame = pickFrame(art.rows, opts.state || {}, opts.time || 0, opts.phase || 0);
-        sheetSprite(g, art, frame, x, y, angle, 32);
+        sheetSprite(g, art, frame, x, y, angle, SIZE);
       } else {
-        sprite(g, art.image, x, y, angle, 32);
+        sprite(g, art.image, x, y, angle, SIZE);
       }
 
       if (!art.rows && opts.weapon && opts.weapon !== 'fists') {
@@ -699,7 +726,10 @@ export function createRenderer(canvas, assets = null) {
   function drawCorpses(g, world) {
     for (const corpse of world.corpses) {
       const jitter = corpse.twitch > 0 ? (Math.random() - 0.5) * corpse.twitch * 2 : 0;
-      body(g, corpse.x + jitter, corpse.y, corpse.angle, PALETTE.dead, { lean: 3, art: 'corpse' });
+      /* Полсекунды тело ещё дёргается и лежит сухим, дальше под ним
+         растекается лужа: время на этаже видно по полу. */
+      body(g, corpse.x + jitter, corpse.y, corpse.angle, PALETTE.dead,
+        { lean: 3, art: corpse.twitch > 0 ? 'corpse' : 'corpse_pool' });
     }
   }
 
