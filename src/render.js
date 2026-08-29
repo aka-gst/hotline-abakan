@@ -252,6 +252,14 @@ export function createRenderer(canvas) {
      ФИГУРЫ
      ======================================================= */
 
+  /*
+   * Тело.
+   *
+   * Кислотный киберпанк здесь означает конкретное: тёмный силуэт, по
+   * которому идёт неоновая кромка, и одна яркая деталь — визор. Цвет
+   * несёт роль, а не украшение: по кромке видно, кто перед тобой, ещё до
+   * того, как разберёшь оружие.
+   */
   function body(g, x, y, angle, palette, opts = {}) {
     const lean = opts.lean || 0;
 
@@ -259,36 +267,112 @@ export function createRenderer(canvas) {
     g.translate(x, y);
 
     /* Жёсткая тень со смещением — весь объём этой игры держится на ней. */
-    g.fillStyle = 'rgba(0,0,0,.5)';
+    g.fillStyle = 'rgba(0,0,0,.55)';
     g.beginPath();
-    g.ellipse(2.5, 3.5, BODY + 1, BODY + 1, 0, 0, 6.29);
+    g.ellipse(3, 4, BODY + 2, BODY + 1, 0, 0, 6.29);
     g.fill();
 
     g.rotate(angle);
 
     if (opts.weapon) drawWeapon(g, opts.weapon, opts.swing || 0, opts.windup || 0);
 
+    /* Тёмная масса тела: неон должен гореть, а не тонуть в заливке. */
     g.fillStyle = palette.body;
     g.beginPath();
     g.ellipse(lean, 0, BODY + 1, BODY, 0, 0, 6.29);
     g.fill();
 
+    /* Кромка. Свечение включается только у неё — иначе кадр плывёт. */
+    g.save();
+    g.strokeStyle = palette.neon;
+    g.lineWidth = 2;
+    g.shadowColor = palette.neon;
+    g.shadowBlur = 10;
+    g.beginPath();
+    g.ellipse(lean, 0, BODY + 1, BODY, 0, 0, 6.29);
+    g.stroke();
+    g.restore();
+
     /* Плечи: по ним читается направление даже на мелком экране. */
-    g.fillStyle = palette.shirt;
-    g.fillRect(-3, -BODY + 1, 7, BODY * 2 - 2);
+    g.fillStyle = palette.neon;
+    g.globalAlpha = 0.5;
+    g.fillRect(-2, -BODY + 2, 5, BODY * 2 - 4);
+    g.globalAlpha = 1;
 
-    g.fillStyle = palette.head;
+    /* Визор — единственная по-настоящему яркая деталь. */
+    g.fillStyle = palette.visor;
     g.beginPath();
-    g.ellipse(3, 0, 5.4, 5.4, 0, 0, 6.29);
+    g.ellipse(4.5, 0, 3, 5, 0, 0, 6.29);
     g.fill();
 
-    g.fillStyle = palette.mask;
-    g.beginPath();
-    g.ellipse(5.4, 0, 3.1, 4.2, 0, 0, 6.29);
-    g.fill();
+    g.save();
+    g.shadowColor = palette.visor;
+    g.shadowBlur = 8;
+    g.fillStyle = '#ffffff';
+    g.fillRect(6, -3.5, 1.6, 7);
+    g.restore();
 
     g.restore();
   }
+
+
+  /*
+   * Удар руками и ногами видно.
+   *
+   * Раньше безоружная драка выглядела как два кружка, стоящие рядом:
+   * приём читался только по букве над головой. Теперь рука выбрасывается
+   * вперёд кулаком, нога уходит по дуге, бросок — двумя руками сразу.
+   */
+  function limbs(g, ent, palette) {
+    const move = ent.move;
+    if (!move || !ent.swing) return;
+
+    const t = Math.min(1, Math.max(0, 1 - ent.swing / 0.16));
+    const push = Math.sin(t * Math.PI);          /* выброс и возврат */
+
+    g.save();
+    g.translate(ent.x, ent.y);
+    g.rotate(ent.angle);
+    g.strokeStyle = palette.neon;
+    g.lineWidth = 3.5;
+    g.lineCap = 'round';
+    g.shadowColor = palette.neon;
+    g.shadowBlur = 8;
+
+    if (move === 'hand') {
+      const reach = 6 + push * 22;
+      g.beginPath();
+      g.moveTo(2, -4);
+      g.lineTo(reach, -2);
+      g.stroke();
+      g.fillStyle = palette.visor;
+      g.beginPath();
+      g.arc(reach, -2, 4, 0, 6.29);
+      g.fill();
+    } else if (move === 'kick') {
+      const swing = -0.9 + t * 1.8;
+      const reach = 10 + push * 24;
+      g.rotate(swing);
+      g.lineWidth = 4.5;
+      g.beginPath();
+      g.moveTo(0, 2);
+      g.lineTo(reach, 2);
+      g.stroke();
+      g.fillStyle = palette.visor;
+      g.fillRect(reach - 3, -2, 7, 8);
+    } else {
+      const reach = 6 + push * 18;
+      for (const side of [-5, 5]) {
+        g.beginPath();
+        g.moveTo(2, side * 0.6);
+        g.lineTo(reach, side);
+        g.stroke();
+      }
+    }
+
+    g.restore();
+  }
+
 
   function drawWeapon(g, weapon, swing, windup) {
     const push = swing > 0 ? 8 - swing * 30 : 0;
@@ -318,11 +402,18 @@ export function createRenderer(canvas) {
     g.fillRect(7 + push * 0.4, 2, 5, 4);
   }
 
+  /*
+   * Цвет здесь — роль, а не украшение. Игрок горит кислотно-зелёным,
+   * безоружный боец — голубым, вооружённый громила — розовым, стрелок —
+   * оранжевым. По одной кромке видно, чем этот будет бить, ещё до того,
+   * как разглядишь, что у него в руках.
+   */
   const PALETTE = {
-    player: { body: '#ffcf4d', shirt: '#ff5ea8', head: '#ffe4b3', mask: '#76ff9f' },
-    thug: { body: '#4de1ff', shirt: '#123a52', head: '#cfeaff', mask: '#0d2233' },
-    shooter: { body: '#ff6b3d', shirt: '#4a1509', head: '#ffd9c4', mask: '#20060a' },
-    dead: { body: '#5a4a63', shirt: '#332a3d', head: '#6d5c76', mask: '#241d2b' },
+    player: { body: '#14231a', neon: '#76ff9f', visor: '#ffe06b' },
+    brawler: { body: '#0e2230', neon: '#2ce8ff', visor: '#9bf6ff' },
+    thug: { body: '#2a0a1b', neon: '#ff1f8f', visor: '#ffd0e8' },
+    shooter: { body: '#2a1408', neon: '#ff9b2d', visor: '#ffe0b3' },
+    dead: { body: '#1a1420', neon: '#4a3d55', visor: '#6d5c76' },
   };
 
 
@@ -608,6 +699,7 @@ export function createRenderer(canvas) {
         swing: enemy.swing || 0,
         windup: enemy.windup || 0,
       });
+      limbs(g, enemy, palette);
 
       /* Достали — тело на пару кадров белеет целиком. */
       if (enemy.hitFlash > 0) {
@@ -688,9 +780,10 @@ export function createRenderer(canvas) {
     if (!player.alive) return;
 
     body(g, player.x, player.y, player.angle, PALETTE.player, {
-      weapon: player.weapon,
+      weapon: player.weapon === 'fists' ? null : player.weapon,
       swing: player.swing,
     });
+    limbs(g, player, PALETTE.player);
 
     /*
      * Дуга удара прочерчивается по ходу замаха, а не висит целиком: так
