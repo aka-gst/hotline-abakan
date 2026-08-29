@@ -877,7 +877,7 @@ export function createRenderer(canvas, assets = null) {
        * раньше удара — иначе это лотерея, а не решение.
        */
       /* Стойка: тусклое кольцо в цвете прикрытия, без буквы и без дуги. */
-      if (!enemy.move && enemy.guard && MOVES[enemy.guard]) {
+      if (enemy.duel && !enemy.move && enemy.guard && MOVES[enemy.guard]) {
         g.save();
         g.strokeStyle = MOVES[enemy.guard].colour;
         g.globalAlpha = 0.5;
@@ -889,7 +889,7 @@ export function createRenderer(canvas, assets = null) {
         g.restore();
       }
 
-      if (enemy.move && MOVES[enemy.move]) {
+      if (enemy.duel && enemy.move && MOVES[enemy.move]) {
         const move = MOVES[enemy.move];
 
         /* Кольцо в цвете приёма: букву читать не обязательно, цвет виден

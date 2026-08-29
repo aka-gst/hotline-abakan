@@ -47,13 +47,28 @@ export const MOVES = {
   },
   kick: {
     id: 'kick', name: 'НОГА', short: 'Н', beats: 'grab',
-    reach: 38, arc: 1.5, startup: 0.2, recovery: 0.3, damage: 2, colour: '#76ff9f',
+    reach: 38, arc: 1.5, startup: 0.2, recovery: 0.32, damage: 2, colour: '#76ff9f',
   },
   grab: {
     id: 'grab', name: 'БРОСОК', short: 'Б', beats: 'hand',
-    reach: 26, arc: 1.2, startup: 0.3, recovery: 0.32, damage: 1, floors: true, colour: '#ff2d95',
+    reach: 26, arc: 1.2, startup: 0.28, recovery: 0.3, damage: 1, floors: true, colour: '#ff2d95',
   },
 };
+
+/*
+ * Круг «камень-ножницы-бумага» остался в коде, но обычных врагов он больше
+ * не касается.
+ *
+ * На живой партии выяснилось простое: в общей свалке размен нечитаем.
+ * Игрок не понимает, почему удар прошёл сквозь противника, и перестаёт
+ * различать собственные приёмы. Механика хорошая, но она про дуэль один на
+ * один, а не про зачистку этажа.
+ *
+ * Поэтому круг включается только там, где оба бойца помечены как дуэлянты
+ * (enemy.duel) — это задел под боссов, где камера и темп будут другими.
+ * Обычная драка стала простой: рука бьёт дважды, нога — один раз, бросок
+ * валит на пол, оружие убивает с одного касания.
+ */
 
 /*
  * Медленное обязано быть сильным, иначе быстрое побеждает всегда.
@@ -68,7 +83,7 @@ export const MOVES = {
 export const MOVE_ORDER = ['hand', 'kick', 'grab'];
 
 /* Сколько попаданий держит безоружный — и игрок, и противник. */
-export const BARE_HP = 3;
+export const BARE_HP = 2;
 
 export const WEAPONS = {
   fists: {
@@ -453,7 +468,9 @@ function bareStrike(world, attacker, target, move, from) {
    * из 40. Приём защищает ровно столько, сколько длится его замах, — и
    * тогда медленный приём остаётся сильным, но перестаёт быть бесплатным.
    */
-  const defence = target.moveStart > 0 ? target.move : (target.guard || null);
+  const defence = target.duel && attacker.duel
+    ? (target.moveStart > 0 ? target.move : (target.guard || null))
+    : null;
   const away = Math.atan2(target.y - attacker.y, target.x - attacker.x);
   const between = { x: (attacker.x + target.x) / 2, y: (attacker.y + target.y) / 2 };
 

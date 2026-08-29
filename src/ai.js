@@ -241,8 +241,12 @@ export function thinkEnemy(world, enemy, dt, speed) {
        * замах, приём уже виден над головой. Без этого размен превращается
        * в лотерею — игроку нечего читать.
        */
+      /* Обычный безоружный бьёт рукой и не изображает школу единоборств:
+         выбор приёмов и стойка — привилегия дуэлянтов. */
       if (!weapon && (!enemy.nextMove || enemy.moveStart <= 0)) {
-        enemy.nextMove = MOVE_ORDER[Math.floor(Math.random() * MOVE_ORDER.length)];
+        enemy.nextMove = enemy.duel
+          ? MOVE_ORDER[Math.floor(Math.random() * MOVE_ORDER.length)]
+          : 'hand';
       }
 
       const move = weapon ? null : MOVES[enemy.nextMove];
@@ -255,7 +259,7 @@ export function thinkEnemy(world, enemy, dt, speed) {
        * приёмом не глядя — прогон показал 38 побед из 40 у того, кто
        * просто жал одну кнопку.
        */
-      if (!weapon) {
+      if (!weapon && enemy.duel) {
         if (dist < reach + 30) {
           enemy.guardLeft = (enemy.guardLeft || 0) - dt;
           if (!enemy.guard || enemy.guardLeft <= 0) {
