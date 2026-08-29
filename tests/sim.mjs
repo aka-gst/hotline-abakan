@@ -17,7 +17,8 @@ import { createWorld, update, WEAPONS, MOVES, BARE_HP, BEAT_PERIOD, BEAT_WINDOW,
 import { createScore } from '../src/score.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap } from '../src/aim.js';
 import { buildFlowField } from '../src/ai.js';
-import { blocksMove } from '../src/level.js';
+import { blocksMove, encode, decode } from '../src/level.js';
+import { generateLevel } from '../src/generate.js';
 
 const DT = 1 / 60;
 const idle = { moveX: 0, moveY: 0, aimAngle: null, attack: false };
@@ -452,6 +453,64 @@ function nearest(world) {
   run(quiet.world, 1);
   check('тихое убийство не поднимает этаж',
     quiet.world.enemies.filter((e) => e.alive && e.state !== 'idle').length === 0);
+}
+
+/* --- H1. Этажи, которые собрались сами --- */
+{
+  /*
+   * Сгенерированный этаж проверяется не на красоту, а на проходимость.
+   * Этаж, где до выхода не дойти или где половина противников заперта в
+   * комнате без двери, — это не «сложный уровень», а сломанный, и увидеть
+   * это на глаз, перебирая зёрна руками, невозможно.
+   */
+  const SEEDS = 40;
+  let broken = 0;
+  let unreachable = 0;
+  let crowded = 0;
+  let ambushed = 0;
+  let mismatched = 0;
+  const counts = [];
+
+  for (let seed = 1; seed <= SEEDS; seed += 1) {
+    const level = generateLevel(seed);
+    const world = createWorld(level);
+    const player = world.player;
+
+    /* Волна от входа: куда игрок вообще может дойти. */
+    const exitIndex = level.tiles.findIndex((t) => t === 4);
+    if (exitIndex < 0) { broken += 1; continue; }
+    const exitX = ((exitIndex % level.w) + 0.5) * TILE_SIZE;
+    const exitY = ((Math.floor(exitIndex / level.w)) + 0.5) * TILE_SIZE;
+    const field = buildFlowField(world, exitX, exitY);
+    const reach = (x, y) => field[Math.floor(y / TILE_SIZE) * world.w + Math.floor(x / TILE_SIZE)] >= 0;
+
+    if (!reach(player.x, player.y)) unreachable += 1;
+    for (const enemy of world.enemies) if (!reach(enemy.x, enemy.y)) unreachable += 1;
+
+    counts.push(world.enemies.length);
+    if (world.enemies.length < 5 || world.enemies.length > 26) crowded += 1;
+
+    /* Никто не должен стоять вплотную ко входу: смерть на первой секунде
+       ничему не учит. */
+    for (const enemy of world.enemies) {
+      if (Math.hypot(enemy.x - player.x, enemy.y - player.y) < TILE_SIZE * 5) ambushed += 1;
+    }
+
+    /* Тот же этаж после кода — тот же этаж: сгенерированное должно
+       пересылаться ссылкой наравне с нарисованным. */
+    const back = decode(encode(level));
+    if (!back || back.w !== level.w || back.h !== level.h
+      || back.tiles.some((t, i) => t !== level.tiles[i])) mismatched += 1;
+  }
+
+  check('сгенерированные этажи собираются', broken === 0, `сломано ${broken} из ${SEEDS}`);
+  check('до выхода и до каждого противника можно дойти', unreachable === 0,
+    `недостижимых ${unreachable}`);
+  check('населённость этажа в разумных пределах', crowded === 0,
+    `мимо ${crowded}, разброс ${Math.min(...counts)}..${Math.max(...counts)}`);
+  check('у входа не ждут вплотную', ambushed === 0, `засад ${ambushed}`);
+  check('сгенерированный этаж переживает кодирование', mismatched === 0,
+    `разошлось ${mismatched}`);
 }
 
 /* --- H2. Ритм решает бой --- */

@@ -7,6 +7,7 @@
  */
 
 import { CAMPAIGN } from './levels.js';
+import { generateLevel } from './generate.js';
 import { decode, encode } from './level.js';
 import { createWorld, update, WEAPONS, MOVES, BARE_HP, beatNow } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
@@ -303,6 +304,24 @@ function typeScore(final) {
 }
 
 /*
+ * Случайный этаж.
+ *
+ * Встроенных этажей мало, а повод открыть игру завтра нужен. Зерно берётся
+ * от часов и остаётся в уровне: сгенерированный этаж кодируется той же
+ * ссылкой, что и нарисованный руками, — значит, его можно переслать, и
+ * получивший пройдёт ровно тот же.
+ */
+function rollFloor() {
+  const seed = 1 + Math.floor(Math.random() * 9999);
+  custom = true;
+  levelIndex = 0;
+  attempts = 0;
+  level = generateLevel(seed);
+  levelCode = encode(level);
+  callScreen();
+}
+
+/*
  * Разбор забега. Строки приходят из score.js уже посчитанными — здесь
  * только вёрстка, чтобы правила начисления жили в одном месте.
  */
@@ -376,6 +395,7 @@ function callScreen() {
     stats: `<span>${controlsHint()}</span>`
       + (best ? `<span>ЛУЧШЕЕ ЗДЕСЬ: ${best.total} · РАНГ ${best.rank} · ${formatTime(best.time)}</span>` : ''),
     action: 'ВЗЯТЬ КЛЮЧИ',
+    second: 'СЛУЧАЙНЫЙ ЭТАЖ',
   });
 }
 
@@ -829,6 +849,7 @@ ui.veilSecond.addEventListener('click', (event) => {
   audio.sfx('ui');
   event.currentTarget.blur();
   if (scene === 'pause') startLevel(level, { silent: true });
+  else if (scene === 'call') rollFloor();
   else if (scene === 'clear') { attempts = 0; callScreen(); }
 });
 
