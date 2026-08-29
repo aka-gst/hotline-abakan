@@ -13,7 +13,7 @@
  */
 
 import { CAMPAIGN } from '../src/levels.js';
-import { createWorld, update, WEAPONS, TILE_SIZE, hasSight, tileIndex } from '../src/world.js';
+import { createWorld, update, WEAPONS, MOVES, BARE_HP, TILE_SIZE, hasSight, tileIndex } from '../src/world.js';
 import { createScore } from '../src/score.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap } from '../src/aim.js';
 import { buildFlowField } from '../src/ai.js';
@@ -59,7 +59,8 @@ function nearest(world) {
 /* --- B. Кулак сбивает, второй удар добивает --- */
 {
   const world = createWorld(CAMPAIGN[0]);
-  const victim = world.enemies[0];
+  /* Берём вооружённого: голыми руками его только сбивают с ног. */
+  const victim = world.enemies.find((e) => e.weapon === 'bat');
   const player = world.player;
   player.x = victim.x - 20;
   player.y = victim.y;
@@ -197,7 +198,7 @@ function nearest(world) {
     step({ ...idle, attack: true });
   };
 
-  const alive = world.enemies.filter((e) => e.alive);
+  const alive = world.enemies.filter((e) => e.alive && e.weapon === 'bat');
   strike(alive[0]);
   const first = score.state.score;
   check('первое убийство стоит базовых очков', first === 100, String(first));
@@ -216,23 +217,39 @@ function nearest(world) {
     String(score.state.score - before));
 
   /* Кулаком сбить, кулаком добить: добивание дороже обычного удара. */
-  const victim = alive[3];
-  player.weapon = 'fists';
-  player.cooldown = 0;
-  player.x = victim.x - 18;
-  player.y = victim.y;
-  player.angle = 0;
+  /*
+   * Добивание проверяем в отдельном мире: вооружённые на этом этаже
+   * кончились, а правило про лежачего от этого не зависит.
+   */
+  const arena = createWorld(CAMPAIGN[0]);
+  const arenaScore = createScore(CAMPAIGN[0], 1);
+  const fighter = arena.player;
+  const victim = arena.enemies.find((e) => e.weapon === 'bat');
+
+  const arenaStep = (intent) => {
+    update(arena, DT, intent || idle);
+    arenaScore.feed(arena.events);
+    arenaScore.update(DT);
+  };
+
+  fighter.weapon = 'fists';
+  fighter.cooldown = 0;
+  fighter.x = victim.x - 18;
+  fighter.y = victim.y;
+  fighter.angle = 0;
   victim.angle = Math.PI;      /* лицом к игроку — не со спины */
-  step({ ...idle, attack: true });
+  arenaStep({ ...idle, attack: true });
   check('кулак не убивает, а сбивает', victim.alive && victim.downed > 0);
 
-  const beforeExecution = score.state.score;
-  for (let i = 0; i < 0.4 / DT; i += 1) step();
-  player.cooldown = 0;
-  step({ ...idle, attack: true });
-  const gained = score.state.score - beforeExecution;
-  check('добивание лежачего дороже удара', gained === 300, `получено ${gained} при цепочке 2`);
-  check('казнь посчитана отдельно', score.state.executions === 1);
+  const beforeExecution = arenaScore.state.score;
+  for (let i = 0; i < 0.4 / DT; i += 1) arenaStep();
+  fighter.cooldown = 0;
+  fighter.x = victim.x - 18;
+  fighter.y = victim.y;
+  arenaStep({ ...idle, attack: true });
+  const gained = arenaScore.state.score - beforeExecution;
+  check('добивание лежачего дороже удара', gained === 150, `получено ${gained}`);
+  check('казнь посчитана отдельно', arenaScore.state.executions === 1);
 
   const final = score.finish(world);
   check('ранг рассчитан', ['S', 'A', 'B', 'C', 'D'].includes(final.rank), final.rank);
@@ -368,7 +385,7 @@ function nearest(world) {
 {
   const setup = (facing) => {
     const world = createWorld(CAMPAIGN[0]);
-    const victim = world.enemies[0];
+    const victim = world.enemies.find((e) => e.weapon === 'bat');
     const player = world.player;
 
     player.weapon = 'fists';
@@ -413,6 +430,83 @@ function nearest(world) {
   run(quiet.world, 1);
   check('тихое убийство не поднимает этаж',
     quiet.world.enemies.filter((e) => e.alive && e.state !== 'idle').length === 0);
+}
+
+/* --- I. Рукопашная: круг приёмов --- */
+{
+  /*
+   * Безоружная драка — отдельная игра: три приёма по кругу и три
+   * попадания до конца. Проверяется главное: одинаковые приёмы гасят друг
+   * друга, круг решает разные, а найденное оружие возвращает игре её
+   * основное правило — один удар, один труп.
+   */
+  const duel = (playerMove, enemyMove) => {
+    const world = createWorld(CAMPAIGN[0]);
+    const enemy = world.enemies.find((e) => !e.weapon);
+    const player = world.player;
+
+    player.weapon = 'fists';
+    player.cooldown = 0;
+    player.x = enemy.x - 22;
+    player.y = enemy.y;
+    player.angle = 0;
+
+    enemy.state = 'chase';
+    enemy.angle = Math.PI;           /* лицом к игроку: не удар со спины */
+    enemy.move = enemyMove;
+    enemy.moveLeft = 0.3;
+
+    update(world, DT, { ...idle, aimAngle: 0, attack: true, move: playerMove });
+    return { world, enemy, player };
+  };
+
+  check('на этаже есть безоружный боец',
+    createWorld(CAMPAIGN[0]).enemies.some((e) => !e.weapon));
+
+  const same = duel('kick', 'kick');
+  check('приём в приём — никому ничего', same.enemy.hp === BARE_HP && same.player.hp === BARE_HP,
+    `у врага ${same.enemy.hp}, у игрока ${same.player.hp}`);
+  check('и обоих отбрасывает', Math.abs(same.enemy.vx) > 50);
+
+  const win = duel('hand', 'kick');
+  check('рука бьёт ногу', win.enemy.hp === BARE_HP - 1, `осталось ${win.enemy.hp}`);
+
+  const lose = duel('hand', 'grab');
+  check('бросок ловит руку — прилетает игроку',
+    lose.player.hp === BARE_HP - 1 && lose.enemy.hp === BARE_HP,
+    `игрок ${lose.player.hp}, враг ${lose.enemy.hp}`);
+
+  /* Три попадания — и боец готов. */
+  const world = createWorld(CAMPAIGN[0]);
+  const enemy = world.enemies.find((e) => !e.weapon);
+  const player = world.player;
+  player.weapon = 'fists';
+  enemy.state = 'chase';
+  enemy.angle = Math.PI;
+
+  for (let i = 0; i < 3; i += 1) {
+    player.cooldown = 0;
+    player.x = enemy.x - 22;
+    player.y = enemy.y;
+    player.angle = 0;
+    enemy.move = null;
+    update(world, DT, { ...idle, aimAngle: 0, attack: true, move: 'hand' });
+    for (let k = 0; k < 25; k += 1) update(world, DT, idle);
+  }
+  check('три попадания кладут безоружного', !enemy.alive);
+
+  /* А с битой в руках — тот же боец с одного удара. */
+  const armed = createWorld(CAMPAIGN[0]);
+  const target = armed.enemies.find((e) => !e.weapon);
+  armed.player.weapon = 'bat';
+  armed.player.cooldown = 0;
+  armed.player.x = target.x - 24;
+  armed.player.y = target.y;
+  armed.player.angle = 0;
+  target.state = 'chase';
+  target.angle = Math.PI;
+  update(armed, DT, { ...idle, aimAngle: 0, attack: true });
+  check('бита кладёт его с одного удара', !target.alive);
 }
 
 /* --- F. Производительность шага --- */

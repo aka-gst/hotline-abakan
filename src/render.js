@@ -13,7 +13,7 @@
  */
 
 import { TILE } from './level.js';
-import { TILE_SIZE, BODY, WEAPONS, backstabReady } from './world.js';
+import { TILE_SIZE, BODY, WEAPONS, MOVES, BARE_HP, backstabReady } from './world.js';
 
 /*
  * Пол светлее стен, а не наоборот. Первый вариант палитры был собран
@@ -648,6 +648,30 @@ export function createRenderer(canvas) {
         g.moveTo(enemy.x + 4, enemy.y - BODY - 10);
         g.lineTo(enemy.x - 4, enemy.y - BODY - 4);
         g.stroke();
+      }
+
+      /*
+       * Телеграф приёма. Размен читается только если чужой выбор виден
+       * раньше удара — иначе это лотерея, а не решение.
+       */
+      if (enemy.move && MOVES[enemy.move]) {
+        const move = MOVES[enemy.move];
+        g.fillStyle = 'rgba(0,0,0,.72)';
+        g.fillRect(enemy.x - 8, enemy.y - BODY - 22, 16, 15);
+        g.strokeStyle = move.colour;
+        g.lineWidth = 1.5;
+        g.strokeRect(enemy.x - 8, enemy.y - BODY - 22, 16, 15);
+        g.fillStyle = move.colour;
+        g.font = '900 11px ui-monospace, monospace';
+        g.fillText(move.short, enemy.x - 3.5, enemy.y - BODY - 11);
+      }
+
+      /* Стойкость безоружного: три деления, по одному за попадание. */
+      if (!enemy.weapon && enemy.hp !== undefined && enemy.hp < BARE_HP) {
+        for (let i = 0; i < BARE_HP; i += 1) {
+          g.fillStyle = i < enemy.hp ? '#ffffff' : 'rgba(255,255,255,.18)';
+          g.fillRect(enemy.x - 9 + i * 7, enemy.y + BODY + 4, 5, 3);
+        }
       }
 
       if (enemy.flash > 0) {

@@ -17,6 +17,28 @@ export const TILE_SIZE = 32;
 /* Радиус тела одинаков у всех: попадание должно читаться на глаз. */
 export const BODY = 9;
 
+/*
+ * Рукопашная — отдельная игра внутри игры.
+ *
+ * Пока в руках ничего нет, драка идёт на три приёма по кругу: рука бьёт
+ * ногу, нога ломает бросок, бросок ловит руку. Одинаковые приёмы гасят
+ * друг друга — никто не получает ничего, и оба отскакивают.
+ *
+ * Смысл в том, что безоружная драка длинная (три попадания), а найденное
+ * оружие возвращает игре её главное правило: один удар — один труп.
+ * Поэтому первые двое стоят между игроком и первой битой, а не наоборот.
+ */
+export const MOVES = {
+  hand: { id: 'hand', name: 'РУКА', short: 'Р', beats: 'kick', reach: 30, arc: 1.9, cooldown: 0.28, colour: '#ffe06b' },
+  kick: { id: 'kick', name: 'НОГА', short: 'Н', beats: 'grab', reach: 36, arc: 1.5, cooldown: 0.38, colour: '#76ff9f' },
+  grab: { id: 'grab', name: 'БРОСОК', short: 'Б', beats: 'hand', reach: 26, arc: 1.2, cooldown: 0.46, colour: '#ff2d95' },
+};
+
+export const MOVE_ORDER = ['hand', 'kick', 'grab'];
+
+/* Сколько попаданий держит безоружный — и игрок, и противник. */
+export const BARE_HP = 3;
+
 export const WEAPONS = {
   fists: {
     id: 'fists', name: 'КУЛАКИ', kind: 'melee',
@@ -232,6 +254,9 @@ export function createWorld(level) {
       weapon: 'fists',
       ammo: 0,
       cooldown: 0,
+      hp: BARE_HP,
+      move: null,        /* приём, который сейчас идёт */
+      moveLeft: 0,
       swing: 0,
       step: 0,
     },
@@ -265,11 +290,14 @@ export function createWorld(level) {
     const x = entity.x * TILE_SIZE + TILE_SIZE / 2;
     const y = entity.y * TILE_SIZE + TILE_SIZE / 2;
 
-    if (entity.type === 0 || entity.type === 1) {
+    if (entity.type === 0 || entity.type === 1 || entity.type === 10) {
       world.enemies.push({
-        kind: entity.type === 0 ? 'thug' : 'shooter',
-        weapon: entity.type === 0 ? 'bat' : 'pistol',
-        ammo: entity.type === 0 ? 0 : 6,
+        kind: entity.type === 10 ? 'brawler' : entity.type === 0 ? 'thug' : 'shooter',
+        weapon: entity.type === 10 ? null : entity.type === 0 ? 'bat' : 'pistol',
+        ammo: entity.type === 0 || entity.type === 10 ? 0 : 6,
+        hp: BARE_HP,
+        move: null,
+        moveLeft: 0,
         x, y, vx: 0, vy: 0,
         home: { x, y },
         angle: (entity.angle || 0) * (Math.PI / 4),
@@ -372,6 +400,134 @@ export function backstabReady(world, enemy) {
   if (!hasSight(world, player.x, player.y, enemy.x, enemy.y)) return false;
 
   return fromBehind(world, player, enemy);
+}
+
+
+/*
+ * Рукопашный размен.
+ *
+ * Оба приёма встречаются в воздухе: одинаковые гасятся, разные решает
+ * круг. Проигравший получает одно попадание из трёх и на треть секунды
+ * выключается — этого хватает, чтобы добавить второе, но не хватает,
+ * чтобы забить безнаказанно.
+ */
+function bareStrike(world, attacker, target, move, from) {
+  const defence = target.move;
+
+  if (defence && defence === move.id) {
+    /* Приём в приём: обоих отбрасывает, никто ничего не получает. */
+    const away = Math.atan2(target.y - attacker.y, target.x - attacker.x);
+    attacker.vx -= Math.cos(away) * 190;
+    attacker.vy -= Math.sin(away) * 190;
+    target.vx += Math.cos(away) * 190;
+    target.vy += Math.sin(away) * 190;
+    target.move = null;
+    world.fx.shake = Math.max(world.fx.shake, 5);
+    world.events.push({ type: 'clash', move: move.id });
+    return;
+  }
+
+  if (defence && MOVES[defence] && MOVES[defence].beats === move.id) {
+    /* Защита перебила приём — бьют уже нападавшего. */
+    damageBare(world, attacker, target, MOVES[defence], from === 'player' ? 'enemy' : 'player');
+    return;
+  }
+
+  damageBare(world, target, attacker, move, from);
+}
+
+
+function damageBare(world, victim, striker, move, from) {
+  const angle = Math.atan2(victim.y - striker.y, victim.x - striker.x);
+
+  victim.hp = (victim.hp === undefined ? BARE_HP : victim.hp) - 1;
+  victim.move = null;
+  victim.moveLeft = 0;
+  victim.hitFlash = 0.14;
+  victim.vx += Math.cos(angle) * 130;
+  victim.vy += Math.sin(angle) * 130;
+
+  world.fx.hitstop = Math.max(world.fx.hitstop, 0.05);
+  world.fx.shake = Math.max(world.fx.shake, 6);
+  world.events.push({ type: 'bare', move: move.id, from, left: victim.hp });
+
+  if (victim === world.player) {
+    if (victim.hp <= 0) killPlayer(world, angle);
+    else victim.cooldown = Math.max(victim.cooldown, 0.3);
+    return;
+  }
+
+  if (victim.hp <= 0) {
+    killEnemy(world, victim, angle, 'bare', { by: from, weapon: 'bare' });
+  } else {
+    victim.stagger = 0.32;
+    pop(world, victim.x, victim.y, 12, '255,255,255');
+  }
+}
+
+
+/*
+ * Безоружный приём. Живёт короткое окно после нажатия: за это время в
+ * него может прилететь чужой приём — так и получается размен, а не обмен
+ * очередями. Против вооружённого работает по старым правилам: кулак
+ * сбивает с ног, удар со спины убивает.
+ */
+function bareAttack(world, attacker, moveId, from) {
+  const move = MOVES[moveId] || MOVES.hand;
+
+  attacker.cooldown = move.cooldown;
+  attacker.move = move.id;
+  attacker.moveLeft = 0.22;
+  attacker.swing = 0.16;
+
+  const candidates = from === 'player'
+    ? world.enemies.filter((e) => e.alive)
+    : [world.player].filter((p) => p.alive);
+
+  let target = null;
+  let best = Infinity;
+
+  for (const candidate of candidates) {
+    const dist = Math.hypot(candidate.x - attacker.x, candidate.y - attacker.y);
+    if (dist > move.reach + BODY || dist >= best) continue;
+    const toTarget = Math.atan2(candidate.y - attacker.y, candidate.x - attacker.x);
+    if (Math.abs(angleDelta(attacker.angle, toTarget)) > move.arc / 2) continue;
+    if (!hasSight(world, attacker.x, attacker.y, candidate.x, candidate.y)) continue;
+    best = dist;
+    target = candidate;
+  }
+
+  const silent = from === 'player' && fromBehind(world, attacker, target);
+  emitNoise(world, attacker.x, attacker.y, silent ? 50 : 75, from);
+  world.events.push({ type: 'move', move: move.id, from, silent });
+
+  if (!target) return;
+
+  const toTarget = Math.atan2(target.y - attacker.y, target.x - attacker.x);
+
+  /* Со спины — сразу насмерть, безоружный он или нет. */
+  if (silent) {
+    killEnemy(world, target, toTarget, 'backstab',
+      { by: from, weapon: 'bare', silent: true });
+    world.fx.hitstop = Math.max(world.fx.hitstop, 0.05);
+    return;
+  }
+
+  /* Вооружённого голыми руками не размениваешь — только сбиваешь с ног. */
+  const armed = target !== world.player && Boolean(target.weapon);
+  if (armed || target === world.player && WEAPONS[target.weapon].lethal) {
+    if (target === world.player) killPlayer(world, toTarget);
+    else if (target.downed > 0) {
+      killEnemy(world, target, toTarget, 'melee', { by: from, weapon: 'bare', execution: true });
+    } else {
+      knockDown(world, target, toTarget);
+    }
+    world.fx.hitstop = Math.max(world.fx.hitstop, 0.05);
+    world.fx.shake = Math.max(world.fx.shake, 6);
+    return;
+  }
+
+  bareStrike(world, attacker, target, move, from);
 }
 
 
@@ -553,6 +709,8 @@ function tryPickup(world) {
 
   player.weapon = best.weapon;
   player.ammo = best.ammo;
+  /* С железом в руках правила снова простые: один удар — один труп. */
+  player.move = null;
   world.pickups.splice(world.pickups.indexOf(best), 1);
   world.events.push({ type: 'pickup' });
 
@@ -692,6 +850,8 @@ function updatePlayer(world, dt, intent) {
 
   player.cooldown = Math.max(0, player.cooldown - dt);
   player.swing = Math.max(0, player.swing - dt);
+  player.moveLeft = Math.max(0, (player.moveLeft || 0) - dt);
+  if (player.moveLeft <= 0) player.move = null;
   player.swingHit = Math.max(0, (player.swingHit || 0) - dt);
   player.flash = Math.max(0, (player.flash || 0) - dt);
 
@@ -708,6 +868,8 @@ function updatePlayer(world, dt, intent) {
         player.cooldown = 0.25;
         world.events.push({ type: 'dry' });
       }
+    } else if (player.weapon === 'fists') {
+      bareAttack(world, player, intent.move || 'hand', 'player');
     } else {
       swingMelee(world, player, 'player');
     }
@@ -732,6 +894,8 @@ function updateEnemy(world, enemy, dt) {
   enemy.swing = Math.max(0, (enemy.swing || 0) - dt);
   enemy.flash = Math.max(0, (enemy.flash || 0) - dt);
   enemy.hitFlash = Math.max(0, (enemy.hitFlash || 0) - dt);
+  enemy.moveLeft = Math.max(0, (enemy.moveLeft || 0) - dt);
+  if (enemy.moveLeft <= 0 && enemy.state !== 'chase') enemy.move = null;
 
   if (enemy.downed > 0) {
     enemy.downed -= dt;
@@ -764,9 +928,13 @@ function updateEnemy(world, enemy, dt) {
   }
 
   if (move.attack) {
-    const weapon = WEAPONS[enemy.weapon];
-    if (weapon.kind === 'gun' && enemy.ammo > 0) fireGun(world, enemy, 'enemy');
-    else if (weapon.kind === 'melee') swingMelee(world, enemy, 'enemy');
+    if (!enemy.weapon) {
+      bareAttack(world, enemy, enemy.nextMove || 'hand', 'enemy');
+    } else {
+      const weapon = WEAPONS[enemy.weapon];
+      if (weapon.kind === 'gun' && enemy.ammo > 0) fireGun(world, enemy, 'enemy');
+      else if (weapon.kind === 'melee') swingMelee(world, enemy, 'enemy');
+    }
   }
 
   enemy.step += Math.hypot(enemy.vx, enemy.vy) * dt;

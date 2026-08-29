@@ -8,13 +8,13 @@
 
 import { CAMPAIGN } from './levels.js';
 import { decode, encode } from './level.js';
-import { createWorld, update, WEAPONS } from './world.js';
+import { createWorld, update, WEAPONS, MOVES, BARE_HP } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
 import { createRenderer } from './render.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { parseHash, buildLink, compare, cleanNick, NICK_KEY } from './challenge.js';
-import { createScore, readBest, writeBest } from './score.js';
+import { createScore, readBest, writeBest, rankFor } from './score.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -26,6 +26,8 @@ const audio = createAudio();
 const ui = {
   weapon: $('weapon'),
   ammo: $('ammo'),
+  bare: $('bare'),
+  moves: $('moves'),
   kills: $('kills'),
   clock: $('clock'),
   toast: $('toast'),
@@ -45,7 +47,10 @@ const ui = {
   scoreTotal: $('scoreTotal'),
   scoreBest: $('scoreBest'),
   score: $('score'),
+  rankNow: $('rankNow'),
   combo: $('combo'),
+  comboValue: $('comboValue'),
+  comboBar: $('comboBar'),
   target: $('target'),
   targetTime: $('targetTime'),
   veilShare: $('veilShare'),
@@ -55,6 +60,12 @@ const ui = {
   ghostMove: $('ghostMove'),
   ghostAim: $('ghostAim'),
 };
+
+/*
+ * Приёмы рукопашной. Нажатие и выбирает приём, и бьёт им: отдельная
+ * кнопка «ударить» здесь только добавила бы шаг между решением и ударом.
+ */
+const MOVE_KEYS = { Digit1: 'hand', Digit2: 'kick', Digit3: 'grab' };
 
 const SFX_BY_EVENT = {
   slam: 'slam',
@@ -274,6 +285,12 @@ function deathScreen() {
   ui.dead.hidden = false;
 }
 
+/* Есть ли следующий этаж кампании. Чужой этаж по ссылке продолжения не имеет. */
+function hasNextFloor() {
+  return !custom && levelIndex + 1 < CAMPAIGN.length;
+}
+
+
 function clearScreen() {
   scene = 'clear';
 
@@ -342,6 +359,7 @@ function buildIntent(raw) {
     moveY: raw.moveY,
     aimAngle: null,
     attack: false,
+    move: null,
     pickup: input.tookKey('KeyE') || input.tookKey('Pickup'),
     throw: input.tookKey('KeyQ') || input.tookKey('Throw'),
   };
@@ -377,8 +395,15 @@ function buildIntent(raw) {
   }
 
   /* Удержание — это очередь ударов, а не один: темп задаёт откат оружия. */
+  for (const code of Object.keys(MOVE_KEYS)) {
+    if (input.tookKey(code)) {
+      intent.move = MOVE_KEYS[code];
+      intent.attack = true;
+    }
+  }
+
   const fired = input.tookKey('Fire') || input.tookKey('Space') || input.tookKey('KeyJ');
-  intent.attack = fired || raw.attackHeld;
+  intent.attack = intent.attack || fired || raw.attackHeld;
 
   /*
    * Палец не умеет одновременно целиться стиком и жать кнопку: это один и
@@ -416,6 +441,22 @@ function updateHud(force) {
     ui.ammo.dataset.empty = '0';
   }
 
+  /*
+   * Голыми руками игрок держит три попадания и дерётся приёмами —
+   * значит, и то и другое должно быть на экране, пока это правда.
+   */
+  const bare = player.weapon === 'fists';
+  if (ui.bare.hidden === bare) {
+    ui.bare.hidden = !bare;
+    ui.moves.hidden = !bare;
+  }
+  if (bare) {
+    const hp = player.hp === undefined ? BARE_HP : player.hp;
+    for (let i = 0; i < ui.bare.children.length; i += 1) {
+      ui.bare.children[i].dataset.lost = i < hp ? '0' : '1';
+    }
+  }
+
   ui.kills.textContent = `${world.kills}/${world.total}`;
   ui.clock.textContent = formatTime(world.time);
 
@@ -429,18 +470,29 @@ function updateHud(force) {
 
   ui.score.textContent = score.state.score;
 
+  /*
+   * Ранг показывается прямо в бою, а не только в конце. Иначе связь
+   * «цепочка → очки → буква» остаётся невидимой: игрок за весь забег ни
+   * разу не увидит, ради чего он держит темп.
+   */
+  const rank = rankFor(score.state.score, world.total);
+  if (ui.rankNow.textContent !== rank) ui.rankNow.textContent = rank;
+
   const combo = score.state.combo;
   if (combo > 1) {
-    if (ui.combo.hidden || ui.combo.dataset.value !== String(combo)) {
-      ui.combo.hidden = false;
+    const left = Math.max(0, score.state.comboLeft / 4);
+    ui.combo.hidden = false;
+    ui.comboBar.style.transform = `scaleX(${left})`;
+    ui.combo.dataset.urgent = left < 0.3 ? '1' : '0';
+
+    if (ui.combo.dataset.value !== String(combo)) {
       ui.combo.dataset.value = String(combo);
-      ui.combo.firstElementChild.textContent = `×${combo}`;
+      ui.comboValue.textContent = `×${combo}`;
       /* Пересборка анимации: без неё каждое следующее убийство не «щёлкает». */
       ui.combo.style.animation = 'none';
       void ui.combo.offsetWidth;
       ui.combo.style.animation = '';
     }
-    ui.combo.lastElementChild.style.transform = `scaleX(${Math.max(0, score.state.comboLeft / 4)})`;
   } else if (!ui.combo.hidden) {
     ui.combo.hidden = true;
     ui.combo.dataset.value = '';
@@ -483,7 +535,28 @@ function vibrate(pattern) {
 
 let previous = performance.now();
 
+/*
+ * Один упавший кадр не должен вешать игру.
+ *
+ * Ровно это и случилось на живом прохождении: на выходе с этажа вызывалась
+ * функция, которую забыли перенести, исключение убивало
+ * requestAnimationFrame — и всё замирало без единого слова на экране.
+ * Игрок видит зависание и не может ни доиграть, ни рассказать, что было.
+ */
 function frame(now) {
+  try {
+    step(now);
+  } catch (error) {
+    console.error(error);
+    setToast(`СБОЙ: ${error.message}`, 6);
+  }
+
+  input.endFrame();
+  requestAnimationFrame(frame);
+}
+
+
+function step(now) {
   const dt = Math.min(0.05, (now - previous) / 1000);
   previous = now;
 
@@ -560,8 +633,6 @@ function frame(now) {
     if (toastTimer <= 0) ui.toast.hidden = true;
   }
 
-  input.endFrame();
-  requestAnimationFrame(frame);
 }
 
 
@@ -683,6 +754,10 @@ window.avto = {
   get world() { return world; },
   get scene() { return scene; },
   get level() { return level; },
+  /* Ручной кадр: в скрытой панели предпросмотра requestAnimationFrame
+     заморожен, и без него нельзя проверить ничего, что происходит во
+     времени, — например, что этаж вообще засчитывается. */
+  step,
 };
 
 const fromHash = levelFromHash();

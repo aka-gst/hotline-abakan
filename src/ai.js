@@ -13,7 +13,7 @@
  *   down   лежит после удара кулаком или брошенной битой
  */
 
-import { TILE_SIZE, BODY, WEAPONS, angleDelta, turnToward, clamp, hasSight, emitNoise, tileIndex } from './world.js';
+import { TILE_SIZE, BODY, WEAPONS, MOVES, MOVE_ORDER, angleDelta, turnToward, clamp, hasSight, emitNoise, tileIndex } from './world.js';
 import { blocksMove } from './level.js';
 
 const SIGHT_RANGE = 300;
@@ -193,10 +193,10 @@ export function thinkEnemy(world, enemy, dt, speed) {
         enemy.lastSeen = { x: player.x, y: player.y };
       }
 
-      const weapon = WEAPONS[enemy.weapon];
+      const weapon = WEAPONS[enemy.weapon] || null;
       enemy.angle = turnToward(enemy.angle, toPlayer, dt * (visible ? 7 : 3.5));
 
-      if (weapon.kind === 'gun') {
+      if (weapon && weapon.kind === 'gun') {
         /*
          * Дальность огня ограничена тем, что игрок видит на своём экране
          * (её сообщает камера). На узком телефоне стрелок подойдёт ближе,
@@ -236,7 +236,18 @@ export function thinkEnemy(world, enemy, dt, speed) {
         break;
       }
 
-      const reach = weapon.reach + BODY - 6;
+      /*
+       * Безоружный дерётся приёмами и выбирает свой заранее: пока идёт
+       * замах, приём уже виден над головой. Без этого размен превращается
+       * в лотерею — игроку нечего читать.
+       */
+      if (!weapon && !enemy.nextMove) {
+        enemy.nextMove = MOVE_ORDER[Math.floor(Math.random() * MOVE_ORDER.length)];
+      }
+
+      const move = weapon ? null : MOVES[enemy.nextMove];
+      const reach = (weapon ? weapon.reach : move.reach) + BODY - 6;
+
       if (dist > reach) {
         const step = (visible && hasSight(world, enemy.x, enemy.y, player.x, player.y))
           ? { x: Math.cos(toPlayer), y: Math.sin(toPlayer) }
@@ -246,9 +257,17 @@ export function thinkEnemy(world, enemy, dt, speed) {
         enemy.windup = 0;
       } else if (enemy.cooldown <= 0) {
         enemy.windup = (enemy.windup || 0) + dt;
-        if (enemy.windup > 0.22) {
+
+        /* Замах и есть телеграф: приём живёт на экране раньше удара. */
+        if (move) {
+          enemy.move = move.id;
+          enemy.moveLeft = 0.4;
+        }
+
+        if (enemy.windup > (move ? 0.34 : 0.22)) {
           enemy.windup = 0;
           result.attack = true;
+          enemy.nextMove = null;
         }
       }
       break;

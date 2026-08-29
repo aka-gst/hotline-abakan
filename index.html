@@ -34,6 +34,9 @@
   <div class="hud-slot hud-weapon">
     <b id="weapon">КУЛАКИ</b>
     <span id="ammo" class="ammo" data-empty="0"></span>
+    <!-- Без оружия драка идёт на три попадания: свои показываем честно. -->
+    <span id="bare" class="bare" hidden><i></i><i></i><i></i></span>
+    <span id="moves" class="moves" hidden>1 РУКА · 2 НОГА · 3 БРОСОК</span>
   </div>
 
   <div class="hud-slot hud-score">
@@ -52,8 +55,14 @@
   <div class="hud-slot hud-points">
     <span class="hud-label">СЧЁТ</span>
     <b id="score">0</b>
-    <!-- Цепочка: полоска показывает, сколько осталось до обнуления. -->
-    <span id="combo" class="combo" hidden><b>×2</b><i></i></span>
+    <span id="rankNow" class="rank-now">D</span>
+  </div>
+
+  <!-- Цепочка живёт отдельным блоком: она главное, за чем следит игрок. -->
+  <div id="combo" class="combo" hidden>
+    <b id="comboValue">×2</b>
+    <span class="combo-label">ЦЕПОЧКА</span>
+    <i id="comboBar"></i>
   </div>
 
 </header>

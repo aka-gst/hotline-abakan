@@ -28,6 +28,17 @@ const RANKS = [
 ];
 
 
+/*
+ * Ранг за текущий счёт. Нужен прямо в бою: игрок должен видеть, что
+ * цепочка не просто добавляет цифры, а двигает букву — иначе и очки, и
+ * ранг остаются чем-то, что показывают один раз в конце.
+ */
+export function rankFor(score, enemies) {
+  const share = enemies ? score / (enemies * PAR_PER_ENEMY) : 0;
+  return RANKS.find((entry) => share >= entry.at).rank;
+}
+
+
 export function createScore(level, attempts = 1) {
   const state = {
     score: 0,

@@ -50,6 +50,9 @@ export const ENTITY = {
   W_PISTOL: 4,  /* пистолет на полу */
   W_SHOTGUN: 5, /* зарезервировано */
   CIVIL: 6,     /* зарезервировано */
+
+  /* Безоружный боец: дерётся приёмами, оружия не роняет. */
+  BRAWLER: 10,
 };
 
 /* Экранный словарь для рисования уровней руками. */
@@ -68,6 +71,7 @@ const CHAR_ENTITY = {
   s: ENTITY.SHOOTER,
   b: ENTITY.W_BAT,
   p: ENTITY.W_PISTOL,
+  k: ENTITY.BRAWLER,
 };
 
 export function blocksMove(tile) {
