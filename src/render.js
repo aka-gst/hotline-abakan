@@ -457,54 +457,114 @@ export function createRenderer(canvas, assets = null) {
       return;
     }
 
+    /*
+     * Человек, нарисованный кодом.
+     *
+     * Три поставки подряд не дали годных персонажей, и каждая следующая
+     * ломалась по-своему: то овалы, то кривые фигуры. Рисовать их здесь
+     * оказалось и быстрее, и надёжнее: всё под контролем до пикселя,
+     * силуэт одинаковый на любом масштабе, а цвет роли, оружие в руке и
+     * фаза удара берутся из тех же данных, что и правила боя.
+     *
+     * Вид сверху означает конкретное: видно плечи и макушку, ступни
+     * выглядывают из-за плеч, руки уходят вперёд. Ничего, что можно
+     * увидеть только сбоку, здесь нет.
+     */
     g.save();
     g.translate(x, y);
 
     /* Жёсткая тень со смещением — весь объём этой игры держится на ней. */
     g.fillStyle = 'rgba(0,0,0,.55)';
     g.beginPath();
-    g.ellipse(3, 4, BODY + 2, BODY + 1, 0, 0, 6.29);
+    g.ellipse(3, 4, BODY + 3, BODY + 2, 0, 0, 6.29);
     g.fill();
 
     g.rotate(angle);
+    /*
+     * Фигура крупнее хитбокса.
+     *
+     * Тело сталкивается кругом радиусом BODY — девять пикселей, — и если
+     * рисовать человека по нему, на экране остаётся точка. Спрайты
+     * рисовались в сорок пикселей, и фигура должна занимать столько же,
+     * иначе разница между «подошёл» и «достал» перестаёт читаться.
+     */
+    g.scale(1.7, 1.7);
 
-    if (opts.weapon) drawWeapon(g, opts.weapon, opts.swing || 0, opts.windup || 0);
+    const state = opts.state || {};
+    const phase = opts.phase || 0;
+    const busy = (opts.swing || 0) > 0 || (opts.windup || 0) > 0;
+    /* Шаг: ступни ходят в противофазе, пока тело движется. */
+    const stride = state.moving
+      ? Math.sin((opts.time || 0) * 11 + (state.offset || 0)) * 3
+      : 0;
+    /* Замах уводит руку назад, удар выбрасывает её вперёд. */
+    const reachOut = busy ? (-4 + phase * 13) : 0;
+    const lean2 = lean * 0.5 + (busy ? phase : 0);
 
-    /* Тёмная масса тела: неон должен гореть, а не тонуть в заливке. */
+    const limb = (fx, fy, tx, ty, width, colour) => {
+      g.strokeStyle = colour;
+      g.lineWidth = width;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(fx, fy);
+      g.lineTo(tx, ty);
+      g.stroke();
+    };
+
+    /*
+     * Порядок важен: сначала то, что за спиной, потом тело, потом голова.
+     * Ступни торчат позади плеч — по ним вид сверху и читается.
+     */
+    limb(-5, -4, -9 - stride, -5, 3.6, palette.legs);
+    limb(-5, 4, -9 + stride, 5, 3.6, palette.legs);
+
+    /* Дальняя рука — вдоль тела, чуть в сторону. */
+    limb(-1, -6, 4, -8.5, 3, palette.legs);
+
+    /* Плечи и корпус: широкий поперёк взгляда, короткий вдоль. */
     g.fillStyle = palette.body;
     g.beginPath();
-    g.ellipse(lean, 0, BODY + 1, BODY, 0, 0, 6.29);
+    if (g.roundRect) g.roundRect(lean2 - 7, -7, 11, 14, 4);
+    else g.ellipse(lean2 - 1, 0, 6, 7, 0, 0, 6.29);
     g.fill();
-
-    /* Кромка. Свечение включается только у неё — иначе кадр плывёт. */
-    g.save();
     g.strokeStyle = palette.neon;
-    g.lineWidth = 2;
-    g.shadowColor = palette.neon;
-    g.shadowBlur = 10;
-    g.beginPath();
-    g.ellipse(lean, 0, BODY + 1, BODY, 0, 0, 6.29);
+    g.lineWidth = 1.1;
     g.stroke();
-    g.restore();
 
-    /* Плечи: по ним читается направление даже на мелком экране. */
-    g.fillStyle = palette.neon;
-    g.globalAlpha = 0.5;
-    g.fillRect(-2, -BODY + 2, 5, BODY * 2 - 4);
-    g.globalAlpha = 1;
+    /* Бьющая рука: во время удара уходит далеко вперёд. */
+    limb(lean2 + 1, 5.5, lean2 + 7 + reachOut, 4 - (busy ? 3 : 0), 3.2, palette.legs);
 
-    /* Визор — единственная по-настоящему яркая деталь. */
-    g.fillStyle = palette.visor;
+    /*
+     * Голова выступает вперёд за плечи — иначе фигура читается кругом.
+     * Тон темнее тела, визор по переднему краю: он и показывает, куда
+     * смотрит.
+     */
+    g.fillStyle = palette.head;
     g.beginPath();
-    g.ellipse(4.5, 0, 3, 5, 0, 0, 6.29);
+    g.ellipse(lean2 + 5.5, 0, 4.4, 4.4, 0, 0, 6.29);
     g.fill();
+    g.strokeStyle = palette.neon;
+    g.lineWidth = 0.9;
+    g.stroke();
 
     g.save();
     g.shadowColor = palette.visor;
-    g.shadowBlur = 8;
-    g.fillStyle = '#ffffff';
-    g.fillRect(6, -3.5, 1.6, 7);
+    g.shadowBlur = 5;
+    g.fillStyle = palette.visor;
+    g.fillRect(lean2 + 7.4, -2.8, 2.2, 5.6);
     g.restore();
+
+    /* Оружие — в бьющей руке, вместе с ней. */
+    if (opts.weapon && opts.weapon !== 'fists') {
+      g.save();
+      g.translate(lean2 + 7 + reachOut * 0.85, 4.5);
+      if (busy) {
+        g.shadowColor = '#ffffff';
+        g.shadowBlur = 6;
+      }
+      drawWeapon(g, opts.weapon, opts.swing || 0, opts.windup || 0);
+      g.restore();
+    }
 
     g.restore();
   }
@@ -731,12 +791,17 @@ export function createRenderer(canvas, assets = null) {
    * оранжевым. По одной кромке видно, чем этот будет бить, ещё до того,
    * как разглядишь, что у него в руках.
    */
+/*
+ * Цвет — это роль. Тело даёт узнавание издалека, кромка обводит силуэт,
+ * визор показывает, куда смотрит, ноги остаются тёмными у всех: по ним
+ * фигура читается как фигура, а не как пятно.
+ */
   const PALETTE = {
-    player: { body: '#14231a', neon: '#76ff9f', visor: '#ffe06b' },
-    brawler: { body: '#0e2230', neon: '#2ce8ff', visor: '#9bf6ff' },
-    thug: { body: '#2a0a1b', neon: '#ff1f8f', visor: '#ffd0e8' },
-    shooter: { body: '#2a1408', neon: '#ff9b2d', visor: '#ffe0b3' },
-    dead: { body: '#1a1420', neon: '#4a3d55', visor: '#6d5c76' },
+    player: { body: '#2f8f5a', head: '#1c5c39', neon: '#76ff9f', visor: '#ffe06b', legs: '#101a2c' },
+    brawler: { body: '#1f6f8f', head: '#12475c', neon: '#2ce8ff', visor: '#d8fbff', legs: '#0b1620' },
+    thug: { body: '#8f2050', head: '#5c122f', neon: '#ff1f8f', visor: '#ffd0e8', legs: '#1a0a12' },
+    shooter: { body: '#a05a1c', head: '#6b3a10', neon: '#ff9b2d', visor: '#ffe0b3', legs: '#1c1208' },
+    dead: { body: '#3a3244', head: '#241e2c', neon: '#4a3d55', visor: '#6d5c76', legs: '#141019' },
   };
 
 
@@ -1226,7 +1291,7 @@ export function createRenderer(canvas, assets = null) {
      */
     if (player.swing > 0 && WEAPONS[player.weapon].kind === 'melee') {
       const weapon = WEAPONS[player.weapon];
-      const done = Math.min(1, 1 - player.swing / 0.16);
+      const done = Math.min(1, 1 - player.swing / 0.22);
       const from = player.angle - weapon.arc / 2;
       const to = from + weapon.arc * done;
       const hit = player.swingHit > 0;
@@ -1235,19 +1300,43 @@ export function createRenderer(canvas, assets = null) {
       g.moveTo(player.x, player.y);
       g.arc(player.x, player.y, weapon.reach, from, to);
       g.closePath();
-      /* Удар в долю светится кислотным, обычный — белым: по цвету дуги
-         видно, попал ли ты в такт, не глядя на счёт. */
+      /*
+       * Удар должно быть видно.
+       *
+       * Дуга была тонкой линией на четверть секунды, и на большом экране
+       * её просто не замечали: «ударов не видно». Теперь у неё три
+       * слоя — заливка сектора, толстая кромка и след из двух затухающих
+       * дуг позади, — и живёт она чуть дольше самого удара.
+       *
+       * Цвет говорит отдельно: попадание в долю музыки светится
+       * кислотным, обычное — белым.
+       */
       const ink = player.beatHit > 0 ? '118,255,159' : '255,255,255';
-      g.fillStyle = hit ? `rgba(${ink},${player.swingHit * 1.6})` : 'rgba(255,255,255,.07)';
+      const force = hit ? Math.min(1, player.swingHit * 5) : Math.min(0.5, player.swing * 3);
+
+      g.fillStyle = hit ? `rgba(${ink},${0.1 + player.swingHit * 1.6})` : `rgba(255,255,255,${0.05 + player.swing * 0.4})`;
       g.fill();
 
-      g.strokeStyle = hit
-        ? `rgba(${ink},${Math.min(0.95, player.swingHit * 5)})`
-        : `rgba(255,255,255,${player.swing * 3})`;
-      g.lineWidth = hit ? 4 : 2;
+      /* След: две дуги позади основной, уже погасшие наполовину. */
+      for (let ghost = 1; ghost <= 2; ghost += 1) {
+        const back = to - weapon.arc * done * 0.22 * ghost;
+        if (back <= from) break;
+        g.strokeStyle = `rgba(${ink},${force * (0.28 / ghost)})`;
+        g.lineWidth = 7 - ghost * 2;
+        g.beginPath();
+        g.arc(player.x, player.y, weapon.reach - ghost, from, back);
+        g.stroke();
+      }
+
+      g.save();
+      g.strokeStyle = `rgba(${ink},${Math.min(0.98, force + 0.25)})`;
+      g.lineWidth = hit ? 5 : 3;
+      g.shadowColor = hit ? `rgba(${ink},.9)` : 'rgba(255,255,255,.5)';
+      g.shadowBlur = hit ? 12 : 6;
       g.beginPath();
       g.arc(player.x, player.y, weapon.reach, from, to);
       g.stroke();
+      g.restore();
     }
 
     if (player.flash > 0) {

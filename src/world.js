@@ -755,7 +755,7 @@ function resolveBare(world, attacker, from) {
   const move = MOVES[attacker.move];
   if (!move) return;
 
-  attacker.swing = 0.16;
+  attacker.swing = 0.22;
 
   const candidates = from === 'player'
     ? world.enemies.filter((e) => e.alive)
@@ -829,7 +829,7 @@ function swingMelee(world, attacker, from) {
      замахнувшийся по музыке успевает к следующей доле. */
   attacker.onBeat = from === 'player' && inRhythm(world);
   attacker.cooldown = weapon.cooldown * (attacker.onBeat ? BEAT_COOLDOWN : 1);
-  attacker.swing = 0.16;
+  attacker.swing = 0.22;
 
   const candidates = from === 'player'
     ? world.enemies.filter((e) => e.alive)
