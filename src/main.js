@@ -11,7 +11,7 @@ import { generateLevel } from './generate.js';
 import { readFloors, saveFloor, markResult } from './floors.js';
 import { pulse } from './pulse.js';
 import { decode, encode } from './level.js';
-import { createWorld, update, WEAPONS, MOVES, BARE_HP, beatNow } from './world.js';
+import { createWorld, update, WEAPONS, MOVES, BARE_HP, beatNow, popNumber } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
 import { createRenderer } from './render.js';
 import { createAssets } from './assets.js';
@@ -762,7 +762,13 @@ function step(now) {
   if (scene === 'play') {
     const intent = buildIntent(raw);
     update(world, dt, intent);
-    score.feed(world.events);
+    /* Очки всплывают там, где случилось убийство: в первоисточнике это
+       и делает счёт частью боя, а не отчётом в конце. */
+    score.feed(world.events, (event, gain, combo) => {
+      if (event.by !== 'player' || event.x === undefined) return;
+      popNumber(world, event.x, event.y, `+${gain}`,
+        combo > 1 ? '#ffe06b' : '#ffffff');
+    });
     score.update(dt);
     drainEvents();
 

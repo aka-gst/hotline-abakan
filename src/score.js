@@ -72,12 +72,20 @@ export function createScore(level, attempts = 1) {
     if (event.beat) state.inRhythm += 1;
     if (event.weapon) state.weapons.add(event.weapon);
 
-    state.score += (event.execution ? EXECUTION : KILL) * state.combo;
+    /* Сколько дало именно это убийство — нужно наружу, чтобы всплыть
+       числом над телом; в конце такой разбивки уже не собрать. */
+    const gain = (event.execution ? EXECUTION : KILL) * state.combo;
+    state.score += gain;
+    state.lastGain = gain;
   }
 
-  function feed(events) {
+  function feed(events, onGain) {
     for (const event of events) {
-      if (event.type === 'kill') kill(event);
+      if (event.type === 'kill') {
+        state.lastGain = 0;
+        kill(event);
+        if (state.lastGain && onGain) onGain(event, state.lastGain, state.combo);
+      }
       else if (event.type === 'shot' && event.from === 'player') state.shots += 1;
     }
   }

@@ -947,6 +947,7 @@ export function createRenderer(canvas, assets = null) {
     drawNoises(ctx, world);
     drawEnemies(ctx, world);
     drawPlayer(ctx, world);
+    drawExitArrow(ctx, world, { x: camX, y: camY });
     drawBullets(ctx, world);
     drawPops(ctx, world);
     drawParticles(ctx, world);
@@ -1297,6 +1298,61 @@ export function createRenderer(canvas, assets = null) {
     }
   }
 
+  /*
+   * Стрелка к выходу.
+   *
+   * В первоисточнике после зачистки на краю кадра появляется «GO!» со
+   * стрелкой, и внизу написано, куда идти. Без этого на большом этаже
+   * последняя минута уходит на поиск двери — самое скучное, что может
+   * случиться после хорошей драки.
+   *
+   * Стрелка живёт у края экрана в стороне выхода и гаснет, когда выход
+   * сам попал в кадр: подсказка нужна ровно до тех пор, пока не видно
+   * цели.
+   */
+  function drawExitArrow(g, world, view) {
+    if (!world.exitOpen || !world.player.alive) return;
+
+    let exit = null;
+    for (let i = 0; i < world.tiles.length && !exit; i += 1) {
+      if (world.tiles[i] !== TILE.EXIT) continue;
+      exit = {
+        x: ((i % world.w) + 0.5) * TILE_SIZE,
+        y: (Math.floor(i / world.w) + 0.5) * TILE_SIZE,
+      };
+    }
+    if (!exit) return;
+
+    const zoom = zoomFor();
+    const halfW = viewW / (2 * zoom);
+    const halfH = viewH / (2 * zoom);
+    const dx = exit.x - view.x;
+    const dy = exit.y - view.y;
+    if (Math.abs(dx) < halfW - 40 && Math.abs(dy) < halfH - 40) return;
+
+    const angle = Math.atan2(dy, dx);
+    const edge = Math.min(halfW, halfH) - 26;
+    const px = view.x + Math.cos(angle) * edge;
+    const py = view.y + Math.sin(angle) * edge;
+    const pulse = 0.6 + Math.sin(world.time * 8) * 0.3;
+
+    g.save();
+    g.translate(px, py);
+    g.rotate(angle);
+    g.globalAlpha = pulse;
+    g.fillStyle = '#76ff9f';
+    g.shadowColor = '#76ff9f';
+    g.shadowBlur = 10;
+    g.beginPath();
+    g.moveTo(14, 0);
+    g.lineTo(-6, -8);
+    g.lineTo(-2, 0);
+    g.lineTo(-6, 8);
+    g.closePath();
+    g.fill();
+    g.restore();
+  }
+
   function drawPlayer(g, world) {
     const player = world.player;
     if (!player.alive) return;
@@ -1443,6 +1499,23 @@ export function createRenderer(canvas, assets = null) {
   }
 
   function drawPops(g, world) {
+    /*
+     * Числа над телами. Всплывают и гаснут: за секунду видно, что этот
+     * удар стоил дороже прошлого, и цепочку начинают беречь.
+     */
+    for (const label of world.numbers) {
+      const done = 1 - label.life / label.span;
+      g.save();
+      g.globalAlpha = Math.min(1, label.life * 3);
+      g.fillStyle = label.colour;
+      g.font = '900 11px ui-monospace, SFMono-Regular, monospace';
+      g.textAlign = 'center';
+      g.shadowColor = 'rgba(0,0,0,.9)';
+      g.shadowBlur = 4;
+      g.fillText(label.text, label.x, label.y - 12 - done * 16);
+      g.restore();
+    }
+
     for (const ring of world.pops) {
       const t = 1 - ring.life / ring.span;
       g.strokeStyle = `rgba(${ring.colour},${(1 - t) * 0.9})`;

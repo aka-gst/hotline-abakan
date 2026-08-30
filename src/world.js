@@ -359,6 +359,17 @@ function pop(world, x, y, radius, colour) {
   world.pops.push({ x, y, r: radius, max: radius * 2.4, life: 0.22, span: 0.22, colour });
 }
 
+/*
+ * Число над телом.
+ *
+ * В первоисточнике очки всплывают там, где случилось убийство, а не
+ * копятся молча в углу: за секунду видно, что этот удар стоил дороже
+ * прошлого. Без этого счёт остаётся отчётом, который смотрят в конце.
+ */
+export function popNumber(world, x, y, text, colour) {
+  world.numbers.push({ x, y, text, colour, life: 0.9, span: 0.9 });
+}
+
 function bleed(world, x, y, angle, force) {
   for (let i = 0; i < 22; i += 1) {
     const a = angle + rand(-0.9, 0.9);
@@ -418,6 +429,8 @@ export function createWorld(level) {
     bullets: [],
     particles: [],
     pops: [],
+    /* Всплывающие числа над телами: сколько дало это убийство. */
+    numbers: [],
     decals: [],
     casings: [],
     noises: [],
@@ -963,6 +976,8 @@ export function killEnemy(world, enemy, angle, cause, source = {}) {
   world.events.push({
     type: 'kill',
     cause,
+    x: enemy.x,
+    y: enemy.y,
     by: source.by || 'player',
     weapon: source.weapon || null,
     execution: Boolean(source.execution),
@@ -1402,6 +1417,9 @@ function updateLoose(world, dt) {
 
   for (const ring of world.pops) ring.life -= dt;
   world.pops = world.pops.filter((ring) => ring.life > 0);
+
+  for (const label of world.numbers) label.life -= dt;
+  world.numbers = world.numbers.filter((label) => label.life > 0);
 
   for (const particle of world.particles) {
     particle.x += particle.vx * dt;
