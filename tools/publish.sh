@@ -1,8 +1,13 @@
 #!/usr/bin/env sh
-# Выкладка «Одного удара»: в зеркало сайта и на сервер.
+# Выкладка «Одного удара» на сервер.
 #
-#   sh tools/publish.sh            только зеркало
-#   sh tools/publish.sh --go       зеркало и сервер
+#   sh tools/publish.sh            показать план
+#   sh tools/publish.sh --go       выложить и проверить
+#
+# Выкладка идёт прямо отсюда. Зеркала в репозитории сайта больше нет: оно
+# было второй копией игры, которую приходилось держать в согласии с этой,
+# и однажды кто-нибудь поправил бы одну из двух. В выкладке сайта udar не
+# значится — игра живёт своим репозиторием, как и остальные игры соседей.
 #
 # Список выкладываемого — БЕЛЫЙ. Причина ровно та же, по которой он белый в
 # deploy.sh сайта: чёрный список защищает только от того, что в него успели
@@ -18,7 +23,6 @@
 set -eu
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-MIRROR="${UDAR_MIRROR:-$HOME/dev/aka-gst.ru/.claude/worktrees/hotline-miami-game-87360a/udar}"
 HOST="${DEPLOY_HOST:-bonita}"
 ROOT="${DEPLOY_ROOT:-/opt/zakriva/caddy/site}"
 SSHOPTS="-o ConnectTimeout=30 -o BatchMode=yes -o ServerAliveInterval=10"
@@ -46,23 +50,9 @@ if [ -n "$missing" ]; then
   exit 1
 fi
 
-echo "== зеркало =="
-mkdir -p "$MIRROR"
-# shellcheck disable=SC2086
-rsync -a --delete $PAYLOAD "$MIRROR/"
-
-# rsync с --delete чистит только внутри перенесённых каталогов: лишнее,
-# лежащее рядом в корне, он не трогает. Поэтому корень зеркала подметаем
-# отдельно — всё, чего нет в белом списке, отсюда уходит.
-( cd "$MIRROR" && for entry in * .[!.]*; do
-    [ -e "$entry" ] || continue
-    keep=""
-    for item in $PAYLOAD; do [ "$entry" = "$item" ] && keep=1; done
-    [ -n "$keep" ] || { echo "  убираю лишнее: $entry"; rm -rf -- "$entry"; }
-  done )
-
 if [ "${1:-}" != "--go" ]; then
-  echo "  (зеркало обновлено; на сервер — с --go)"
+  echo "план: на сервер уедет$(printf ' %s' $PAYLOAD)"
+  echo "  (черновой прогон; повторите с --go)"
   exit 0
 fi
 
