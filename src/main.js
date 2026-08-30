@@ -9,6 +9,7 @@
 import { CAMPAIGN } from './levels.js';
 import { generateLevel } from './generate.js';
 import { readFloors, saveFloor, markResult } from './floors.js';
+import { pulse } from './pulse.js';
 import { decode, encode } from './level.js';
 import { createWorld, update, WEAPONS, MOVES, BARE_HP, beatNow } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
@@ -389,6 +390,7 @@ function startLevel(next, { silent } = {}) {
   if (changed || !levelCode) levelCode = encode(level);
 
   world = createWorld(level);
+  pulse.floorStarted(level, levelIndex, attempts + 1);
   view = { x: world.player.x, y: world.player.y };
   renderer.invalidate();
   scene = 'play';
@@ -404,6 +406,7 @@ function startLevel(next, { silent } = {}) {
 
 function callScreen() {
   scene = 'call';
+  pulse.screen('call');
   const best = readBest(levelCode);
 
   showVeil({
@@ -432,6 +435,7 @@ function callScreen() {
  */
 function deathScreen() {
   scene = 'dead';
+  if (world) pulse.died(level, levelIndex, world, attempts);
   /* Подпись под словом «ЗАНОВО» — про то, что у игрока в руках. */
   const how = ui.dead.querySelector('span');
   if (how) how.textContent = byFinger() ? 'КОСНИСЬ ЭКРАНА' : 'ПРОБЕЛ ИЛИ R';
@@ -456,8 +460,10 @@ function rememberFloor(final) {
 
 function clearScreen() {
   scene = 'clear';
+  pulse.screen('clear');
 
   result = score.finish(world);
+  pulse.cleared(level, levelIndex, world, result, attempts);
   const record = writeBest(levelCode, result, world.time);
   const more = hasNextFloor();
   rememberFloor(result);
