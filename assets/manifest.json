@@ -209,6 +209,356 @@
           1
         ]
       }
+    },
+    "flat": {
+      "image": "tiles-flat.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "floor_worn": [
+          2,
+          0
+        ],
+        "floor_stain": [
+          3,
+          0
+        ],
+        "wall_body": [
+          4,
+          0
+        ],
+        "wall_top": [
+          5,
+          0
+        ],
+        "wall_edge": [
+          6,
+          0
+        ],
+        "wall_corner": [
+          7,
+          0
+        ],
+        "door_h": [
+          0,
+          1
+        ],
+        "door_v": [
+          1,
+          1
+        ],
+        "table": [
+          2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
+          1
+        ]
+      }
+    },
+    "garage": {
+      "image": "tiles-garage.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "floor_worn": [
+          2,
+          0
+        ],
+        "floor_stain": [
+          3,
+          0
+        ],
+        "wall_body": [
+          4,
+          0
+        ],
+        "wall_top": [
+          5,
+          0
+        ],
+        "wall_edge": [
+          6,
+          0
+        ],
+        "wall_corner": [
+          7,
+          0
+        ],
+        "door_h": [
+          0,
+          1
+        ],
+        "door_v": [
+          1,
+          1
+        ],
+        "table": [
+          2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
+          1
+        ]
+      }
+    },
+    "market": {
+      "image": "tiles-market.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "floor_worn": [
+          2,
+          0
+        ],
+        "floor_stain": [
+          3,
+          0
+        ],
+        "wall_body": [
+          4,
+          0
+        ],
+        "wall_top": [
+          5,
+          0
+        ],
+        "wall_edge": [
+          6,
+          0
+        ],
+        "wall_corner": [
+          7,
+          0
+        ],
+        "door_h": [
+          0,
+          1
+        ],
+        "door_v": [
+          1,
+          1
+        ],
+        "table": [
+          2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
+          1
+        ]
+      }
+    },
+    "dk": {
+      "image": "tiles-dk.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "floor_worn": [
+          2,
+          0
+        ],
+        "floor_stain": [
+          3,
+          0
+        ],
+        "wall_body": [
+          4,
+          0
+        ],
+        "wall_top": [
+          5,
+          0
+        ],
+        "wall_edge": [
+          6,
+          0
+        ],
+        "wall_corner": [
+          7,
+          0
+        ],
+        "door_h": [
+          0,
+          1
+        ],
+        "door_v": [
+          1,
+          1
+        ],
+        "table": [
+          2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
+          1
+        ]
+      }
+    },
+    "post": {
+      "image": "tiles-post.png",
+      "size": 64,
+      "map": {
+        "floor": [
+          0,
+          0
+        ],
+        "floor_alt": [
+          1,
+          0
+        ],
+        "floor_worn": [
+          2,
+          0
+        ],
+        "floor_stain": [
+          3,
+          0
+        ],
+        "wall_body": [
+          4,
+          0
+        ],
+        "wall_top": [
+          5,
+          0
+        ],
+        "wall_edge": [
+          6,
+          0
+        ],
+        "wall_corner": [
+          7,
+          0
+        ],
+        "door_h": [
+          0,
+          1
+        ],
+        "door_v": [
+          1,
+          1
+        ],
+        "table": [
+          2,
+          1
+        ],
+        "glass": [
+          3,
+          1
+        ],
+        "rug": [
+          4,
+          1
+        ],
+        "exit": [
+          5,
+          1
+        ],
+        "vent": [
+          6,
+          1
+        ],
+        "pipe": [
+          7,
+          1
+        ]
+      }
     }
   },
   "items": {
