@@ -567,17 +567,6 @@ body[data-showcase="1"] .combo { display: none; }
   .dead { padding-right: 96px; }
 }
 
-/* Доля музыки на кнопке удара: короткая вспышка, которую видно краем
-   глаза, не отвлекаясь от этажа. */
-.pad-key.on-beat {
-  animation: padBeat .18s ease-out;
-}
-
-@keyframes padBeat {
-  from { box-shadow: 0 0 0 0 #76ff9f88; border-color: var(--acid); }
-  to { box-shadow: 0 0 0 12px #76ff9f00; }
-}
-
 /*
  * Телефон, положенный набок, — самый тесный экран, какой у игры бывает:
  * сверху его ест панель браузера, снизу лежит палец. Кнопки меньше,
