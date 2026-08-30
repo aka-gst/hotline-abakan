@@ -567,17 +567,6 @@ body[data-showcase="1"] .combo { display: none; }
   .dead { padding-right: 96px; }
 }
 
-/* Доля музыки на кнопке удара: короткая вспышка, которую видно краем
-   глаза, не отвлекаясь от этажа. */
-.pad-key.on-beat {
-  animation: padBeat .18s ease-out;
-}
-
-@keyframes padBeat {
-  from { box-shadow: 0 0 0 0 #76ff9f88; border-color: var(--acid); }
-  to { box-shadow: 0 0 0 12px #76ff9f00; }
-}
-
 /*
  * Телефон, положенный набок, — самый тесный экран, какой у игры бывает:
  * сверху его ест панель браузера, снизу лежит палец. Кнопки меньше,
@@ -893,16 +882,6 @@ body[data-showcase="1"] .combo { display: none; }
 @media (max-width: 430px) {
   .hud { flex-direction: column; }
   .hud-slot { padding: 6px 9px; }
-  /* Иконка оружия: пиксели не сглаживаем, иначе бита превращается в пятно. */
-.weapon-icon {
-  display: block;
-  width: 44px;
-  height: 22px;
-  margin-bottom: 4px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
 .hud-slot b { font-size: 11px; }
 }
 
@@ -914,9 +893,5 @@ body[data-showcase="1"] .combo { display: none; }
   .veil-score { padding: 10px 12px; }
   .score-lines li, .veil-score li { padding: 2px 0; }
   .rank b, #rankLetter { font-size: 34px; }
-  .veil-stats span[data-warn="1"] {
-  color: var(--pink);
-}
-
 .veil-stats { margin-bottom: 12px; }
 }
