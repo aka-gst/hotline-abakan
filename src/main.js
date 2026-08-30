@@ -1004,6 +1004,14 @@ ui.mute.addEventListener('click', () => {
   toggleMute();
 });
 
+const pauseButton = $('btnPause');
+if (pauseButton) {
+  pauseButton.addEventListener('click', (event) => {
+    event.currentTarget.blur();
+    if (scene === 'play') pauseScreen();
+  });
+}
+
 input.bindButton($('btnAttack'), 'attack');
 input.bindButton($('btnPickup'), 'pickup');
 input.bindButton($('btnThrow'), 'throw');

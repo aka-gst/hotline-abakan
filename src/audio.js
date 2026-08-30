@@ -136,6 +136,21 @@ export function createAudio() {
     снова и снова. Поэтому на localhost умолчание — тишина,
     а явно сохранённый выбор всё равно сильнее умолчания.
   */
+  /*
+   * Немой запуск по адресу: ?тихо (или ?quiet).
+   *
+   * Глушить игру снаружи ненадёжно: контекст оживает при переразмере
+   * окна, при возврате во вкладку, при первом жесте — и страница вдруг
+   * запевает на чужие колонки. Владелец слышал это трижды за вечер, и
+   * каждый раз думал, что играет его собственная игра.
+   *
+   * Поэтому немота должна быть свойством адреса, а не состоянием, которое
+   * можно потерять. Параметр сильнее всего остального и в память не
+   * пишется: закрыл вкладку — и обычный адрес снова со звуком.
+   */
+  const quiet = /(^|[?&#])(тихо|quiet)(=1|=true)?([&#]|$)/i
+    .test(window.location.search + window.location.hash);
+
   try {
     const saved = localStorage.getItem('avto-muted');
 
@@ -143,9 +158,9 @@ export function createAudio() {
       /^(localhost|127\.0\.0\.1|\[::1\])$/.test(
         window.location.hostname);
 
-    muted = saved === null ? local : saved === '1';
+    muted = quiet ? true : (saved === null ? local : saved === '1');
   } catch (error) {
-    muted = false;
+    muted = quiet;
   }
 
   fetch('music/manifest.json', { cache: 'no-cache' })

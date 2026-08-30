@@ -183,6 +183,22 @@ html, body {
   image-rendering: pixelated;
 }
 
+/* Пауза: маленькая, в строке показаний, вне зоны большого пальца. */
+.hud-pause {
+  display: none;
+  align-self: flex-start;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #ffffff26;
+  background: #0d0a18cc;
+  color: var(--paper);
+  font: 800 12px var(--mono);
+  letter-spacing: .1em;
+  cursor: pointer;
+}
+
+.hud-pause:active { border-color: var(--acid); color: var(--acid); }
+
 .hud-slot b {
   font: 800 13px/1 var(--mono);
   letter-spacing: .1em;
@@ -528,6 +544,19 @@ body[data-showcase="1"] .combo { display: none; }
 /* Кнопки нужны только пальцу: мышь получает тот же ввод с клавиатуры. */
 @media (pointer: coarse) {
   .pad { display: grid; }
+  .hud-pause { display: block; }
+
+  /*
+   * Во время боя «НА САЙТ» и «ЗВУК» уходят с экрана.
+   *
+   * Кольца действия играть не мешают: они контурные, поле сквозь них
+   * видно, и лежат там, где и должен лежать большой палец. А эти две —
+   * служебные, и случайное касание по ним стоит партии: одно уводит с
+   * сайта, другое включает музыку посреди тишины. Между попытками они на
+   * месте, и туда же ведёт пауза.
+   */
+  body[data-scene="play"] .game-home-menu,
+  body[data-scene="play"] .mute { display: none; }
 
   /* Тост поднят выше: внизу лежит палец, который ведёт. */
   .toast { bottom: max(30vh, 190px); }
@@ -581,11 +610,6 @@ body[data-showcase="1"] .combo { display: none; }
   .hud-slot b { font-size: 10px; }
   .weapon-icon { width: 30px; height: 15px; margin-bottom: 2px; }
 
-  /* Во время боя «НА САЙТ» и «ЗВУК» не нужны, а место занимают то самое,
-     где стоят кнопки. Возвращаются они на любом экране между попытками —
-     там до них и тянутся. */
-  body[data-scene="play"] .game-home-menu,
-  body[data-scene="play"] .mute { display: none; }
 }
 
 
