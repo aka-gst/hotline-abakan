@@ -10,6 +10,7 @@ import { CAMPAIGN } from './levels.js';
 import { generateLevel } from './generate.js';
 import { readFloors, saveFloor, markResult } from './floors.js';
 import { pulse } from './pulse.js';
+import { showcaseLevel, stageShowcase, showcaseIntent, SHOWCASE_SECONDS } from './showcase.js';
 import { decode, encode } from './level.js';
 import { createWorld, update, WEAPONS, MOVES, BARE_HP, beatNow, popNumber } from './world.js';
 import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTarget } from './aim.js';
@@ -736,7 +737,52 @@ function frame(now) {
    идёт ли бой, чтобы убирать со стеснённого экрана всё лишнее. */
 let shownScene = null;
 
+/*
+ * Витрина.
+ *
+ * Карточка игры на сайте показывает короткую петлю с самым ярким
+ * моментом — ударом в долю музыки. Отсюда отдаётся не видео, а сцена:
+ * startShowcase() ставит её и играет, снимает витрина. Петля
+ * перезапускается сама, поэтому снять можно с любого момента.
+ */
+let showcase = false;
+
+function startShowcase() {
+  showcase = true;
+  audio.setMuted(true);
+  hideVeil();
+  ui.dead.hidden = true;
+  document.body.dataset.showcase = '1';
+
+  custom = true;
+  level = showcaseLevel();
+  levelCode = encode(level);
+  attempts = 0;
+  world = createWorld(level);
+  stageShowcase(world);
+  view = { x: world.player.x, y: world.player.y };
+  score = createScore(level, 1);
+  renderer.invalidate();
+  scene = 'play';
+  return SHOWCASE_SECONDS;
+}
+
+function stopShowcase() {
+  showcase = false;
+  delete document.body.dataset.showcase;
+  callScreen();
+}
+
 function step(now) {
+  /* Петля витрины: три секунды и заново, чтобы снимать можно было с
+     любого момента. */
+  if (showcase && world && world.time > SHOWCASE_SECONDS) {
+    world = createWorld(level);
+    stageShowcase(world);
+    view = { x: world.player.x, y: world.player.y };
+    score = createScore(level, 1);
+  }
+
   if (shownScene !== scene) {
     shownScene = scene;
     document.body.dataset.scene = scene;
@@ -760,7 +806,11 @@ function step(now) {
   if (input.tookKey('KeyM')) toggleMute();
 
   if (scene === 'play') {
-    const intent = buildIntent(raw);
+    /* В режиме витрины нажатия приходят из сценария, а не от рук: дальше
+       работает вся игра как обычно — наводка, откат, ритм, кровь. */
+    const intent = showcase
+      ? showcaseIntent(world.time, world)
+      : buildIntent(raw);
     update(world, dt, intent);
     /* Очки всплывают там, где случилось убийство: в первоисточнике это
        и делает счёт частью боя, а не отчётом в конце. */
@@ -816,10 +866,12 @@ function step(now) {
      * в другой. Поэтому на сенсоре камера держит игрока по центру и
      * выходит за края этажа, показывая темноту.
      */
-    const lead = byFinger() ? 0 : 60;
+    /* В витрине камера держит игрока по центру: кадр короткий, и action
+       не должен уезжать в угол маленькой комнаты. */
+    const lead = (showcase || byFinger()) ? 0 : 60;
     view.x += (player.x + Math.cos(player.angle) * lead - view.x) * Math.min(1, dt * 13);
     view.y += (player.y + Math.sin(player.angle) * lead - view.y) * Math.min(1, dt * 13);
-    view.centred = byFinger();
+    view.centred = showcase || byFinger();
     lastView = renderer.draw(world, view);
 
     /*
@@ -1040,6 +1092,13 @@ window.avto = {
      событие выхода живёт один кадр; а посмотреть на карточку глазами
      надо после каждой правки её вёрстки. */
   screens: { call: callScreen, clear: clearScreen, dead: deathScreen, pause: pauseScreen },
+  /*
+   * Снаряд для витрины: ставит сцену и играет её петлёй по три секунды.
+   * Возвращает длительность петли, чтобы снимающий знал, сколько писать.
+   * Звук выключается сам — петля идёт без него.
+   */
+  showcase: startShowcase,
+  showcaseStop: stopShowcase,
 };
 
 const fromHash = levelFromHash();

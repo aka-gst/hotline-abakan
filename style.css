@@ -514,6 +514,17 @@ html, body {
   transform: scale(.94);
 }
 
+/*
+ * Витрина: в петле для карточки на сайте показывается только бой. Ни
+ * показаний, ни кнопок, ни ссылки на сайт — три секунды чистого кадра.
+ */
+body[data-showcase="1"] .hud,
+body[data-showcase="1"] .pad,
+body[data-showcase="1"] .mute,
+body[data-showcase="1"] .game-home-menu,
+body[data-showcase="1"] .toast,
+body[data-showcase="1"] .combo { display: none; }
+
 /* Кнопки нужны только пальцу: мышь получает тот же ввод с клавиатуры. */
 @media (pointer: coarse) {
   .pad { display: grid; }
