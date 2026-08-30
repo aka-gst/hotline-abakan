@@ -20,6 +20,98 @@
 const STEP_PER_BAR = 16;
 const BPM = 108;
 
+/*
+ * Звуки как данные, а не как код.
+ *
+ * Каждый звук — список слоёв: тон с падающей частотой или отфильтрованный
+ * шум. Раньше это были функции, дёргающие WebAudio напрямую, и проверить
+ * их можно было только ушами: «функцию вызвали» ничего не говорит о том,
+ * что из колонок вышел звук, и тем более о том, насколько он громкий
+ * относительно соседних.
+ *
+ * Теперь рецепт один на две дороги: в браузере из него собираются узлы
+ * WebAudio, в прогоне tests/audio.mjs он же считается в сэмплы, и по ним
+ * меряются пик и разброс громкости между звуками. Разброс — та самая
+ * жалоба «некоторые звуки оч громкие», которую иначе слышно раньше, чем
+ * видно.
+ */
+export const RECIPES = {
+  shot: [
+    { kind: 'noise', duration: 0.16, filter: 'highpass', frequency: 900, gain: 0.387 },
+    { kind: 'tone', type: 'square', from: 320, to: 60, duration: 0.14, gain: 0.246 },
+  ],
+  swing: [
+    { kind: 'noise', duration: 0.16, filter: 'bandpass', frequency: 1500, gain: 0.861, q: 1.2 },
+  ],
+  /* Глухой удар в тело: низ даёт вес, шум — треск. Свист остаётся промахом. */
+  impact: [
+    { kind: 'tone', type: 'sine', from: 240, to: 55, duration: 0.2, gain: 0.48 },
+    { kind: 'noise', duration: 0.14, filter: 'lowpass', frequency: 900, gain: 0.377 },
+    { kind: 'tone', type: 'square', from: 110, to: 45, duration: 0.1, gain: 0.192 },
+  ],
+  /* Приём в приём: звонкий металлический щелчок, ни на что не похожий. */
+  clash: [
+    { kind: 'tone', type: 'square', from: 1400, to: 700, duration: 0.12, gain: 0.229 },
+    { kind: 'noise', duration: 0.12, filter: 'highpass', frequency: 3000, gain: 0.213 },
+  ],
+  /* Твой удар погасили: глухой шлепок без звона. */
+  parry: [
+    { kind: 'noise', duration: 0.14, filter: 'lowpass', frequency: 800, gain: 0.545 },
+    { kind: 'tone', type: 'sine', from: 260, to: 140, duration: 0.12, gain: 0.343 },
+  ],
+  knock: [
+    { kind: 'tone', type: 'sine', from: 180, to: 50, duration: 0.18, gain: 0.467 },
+    { kind: 'noise', duration: 0.1, filter: 'lowpass', frequency: 500, gain: 0.28 },
+  ],
+  kill: [
+    { kind: 'noise', duration: 0.28, filter: 'lowpass', frequency: 1200, gain: 0.781 },
+    { kind: 'tone', type: 'sawtooth', from: 140, to: 40, duration: 0.3, gain: 0.546 },
+  ],
+  /* Тихое убийство: короткий влажный срез вместо грохота. */
+  backstab: [
+    { kind: 'noise', duration: 0.16, filter: 'bandpass', frequency: 2600, gain: 0.324, q: 2 },
+    { kind: 'tone', type: 'sine', from: 420, to: 90, duration: 0.18, gain: 0.325 },
+  ],
+  death: [
+    { kind: 'tone', type: 'sawtooth', from: 420, to: 40, duration: 0.9, gain: 0.512 },
+    { kind: 'noise', duration: 0.6, filter: 'lowpass', frequency: 700, gain: 0.41 },
+  ],
+  pickup: [
+    { kind: 'tone', type: 'square', from: 620, to: 940, duration: 0.09, gain: 0.28 },
+  ],
+  dry: [
+    { kind: 'noise', duration: 0.05, filter: 'highpass', frequency: 3000, gain: 0.253 },
+  ],
+  glass: [
+    { kind: 'noise', duration: 0.5, filter: 'highpass', frequency: 2600, gain: 0.27, q: 6 },
+  ],
+  spot: [
+    { kind: 'tone', type: 'square', from: 700, to: 1300, duration: 0.12, gain: 0.3 },
+  ],
+  /* Шаг: короткий низкий шлепок. Один только отфильтрованный шум на 380 Гц
+     давал пик 0.009 — то есть тишину: фильтр съедал всё, что в него клали. */
+  step: [
+    { kind: 'tone', type: 'sine', from: 120, to: 60, duration: 0.05, gain: 0.287 },
+    { kind: 'noise', duration: 0.05, filter: 'lowpass', frequency: 900, gain: 0.205 },
+  ],
+  exit: [
+    { kind: 'tone', type: 'triangle', from: 520, to: 1040, duration: 0.35, gain: 0.367 },
+  ],
+  ui: [
+    { kind: 'tone', type: 'square', from: 300, to: 520, duration: 0.06, gain: 0.22 },
+  ],
+  /* Дверь: тяжёлый деревянный хлопок, ни на что другое не похожий. */
+  slam: [
+    { kind: 'tone', type: 'sine', from: 150, to: 45, duration: 0.22, gain: 0.631 },
+    { kind: 'noise', duration: 0.18, filter: 'lowpass', frequency: 700, gain: 0.473 },
+  ],
+  /* Оружие рассыпалось в руках. */
+  broke: [
+    { kind: 'noise', duration: 0.22, filter: 'highpass', frequency: 2400, gain: 0.246, q: 4 },
+    { kind: 'tone', type: 'triangle', from: 900, to: 300, duration: 0.16, gain: 0.102 },
+  ],
+};
+
 export function createAudio() {
   let ctx = null;
   let master = null;
@@ -164,46 +256,14 @@ export function createAudio() {
     osc.stop(ctx.currentTime + duration + 0.02);
   }
 
-  const EFFECTS = {
-    shot() { noise(0.16, 'highpass', 900, 0.55); tone('square', 320, 60, 0.14, 0.35); },
-    swing() { noise(0.16, 'bandpass', 1500, 0.14, 1.2); },
-    /* Глухой удар в тело: низ даёт вес, шум — треск. Свист остаётся промахом. */
-    impact() {
-      tone('sine', 240, 55, 0.2, 0.7);
-      noise(0.14, 'lowpass', 900, 0.55);
-      tone('square', 110, 45, 0.1, 0.28);
-    },
-    /* Приём в приём: звонкий металлический щелчок, ни на что не похожий. */
-    clash() { tone('square', 1400, 700, 0.12, 0.3); noise(0.12, 'highpass', 3000, 0.28); },
-    /* Твой удар погасили: глухой шлепок без звона. */
-    parry() { noise(0.14, 'lowpass', 800, 0.35); tone('sine', 260, 140, 0.12, 0.22); },
-    knock() { tone('sine', 180, 50, 0.18, 0.5); noise(0.1, 'lowpass', 500, 0.3); },
-    kill() { noise(0.28, 'lowpass', 1200, 0.5); tone('sawtooth', 140, 40, 0.3, 0.35); },
-    /* Тихое убийство: короткий влажный срез вместо грохота. */
-    backstab() { noise(0.16, 'bandpass', 2600, 0.3, 2); tone('sine', 420, 90, 0.18, 0.22); },
-    death() { tone('sawtooth', 420, 40, 0.9, 0.5); noise(0.6, 'lowpass', 700, 0.4); },
-    pickup() { tone('square', 620, 940, 0.09, 0.22); },
-    dry() { noise(0.05, 'highpass', 3000, 0.25); },
-    glass() { noise(0.5, 'highpass', 2600, 0.45, 6); },
-    spot() { tone('square', 700, 1300, 0.12, 0.28); },
-    step() { noise(0.05, 'lowpass', 380, 0.11); },
-    exit() { tone('triangle', 520, 1040, 0.35, 0.3); },
-    ui() { tone('square', 300, 520, 0.06, 0.16); },
-    /* Дверь: тяжёлый деревянный хлопок, ни на что другое не похожий. */
-    slam() { tone('sine', 150, 45, 0.22, 0.6); noise(0.18, 'lowpass', 700, 0.45); },
-
-    /* Демоны: набор ползёт вверх, выстрел щёлкает, луч гудит, вспышка бьёт. */
-    /* Отбитая стихия: глухой шлепок и звон — ни с попаданием, ни с промахом
-       это спутать нельзя, а именно тут игрок и не понимает, что произошло. */
-    beamup() { tone('sawtooth', 180, 900, 0.26, 0.22); },
-    beam() { tone('sawtooth', 1200, 300, 0.4, 0.4); noise(0.35, 'bandpass', 2400, 0.3, 3); },
-    nova() { tone('sine', 320, 40, 0.5, 0.7); noise(0.45, 'lowpass', 1400, 0.6); },
-  };
-
-  function sfx(name, detail) {
+  function sfx(name) {
     if (muted || !ensure() || ctx.state !== 'running') return;
-    const effect = EFFECTS[name];
-    if (effect) effect(detail);
+    const recipe = RECIPES[name];
+    if (!recipe) return;
+    for (const layer of recipe) {
+      if (layer.kind === 'tone') tone(layer.type, layer.from, layer.to, layer.duration, layer.gain);
+      else noise(layer.duration, layer.filter, layer.frequency, layer.gain, layer.q);
+    }
   }
 
 
