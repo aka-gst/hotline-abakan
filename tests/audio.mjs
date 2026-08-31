@@ -15,7 +15,7 @@
  * Проверка проверяется поломкой: `node tests/audio.mjs --sam` зануляет
  * огибающую и убеждается, что тишина не проходит.
  */
-import { RECIPES } from '../src/audio.js';
+import { RECIPES, wantsQuiet } from '../src/audio.js';
 
 const RATE = 44100;
 let failed = 0;
@@ -121,6 +121,38 @@ function measure(samples) {
 }
 
 const db = (value) => 20 * Math.log10(Math.max(value, 1e-6));
+
+/* --- немой запуск по адресу ------------------------------------------ */
+
+/*
+ * Кириллица в адресе приезжает закодированной: браузер превращает `?тихо`
+ * в `?%D1%82%D0%B8%D1%85%D0%BE`. Сравнение по сырой строке этого не
+ * видит, и параметр работал только латиницей — поймано замером на бою,
+ * не глазами. Поэтому оба написания и обе формы проверяются здесь.
+ */
+const QUIET_CASES = [
+  ['?тихо', true],
+  ['?%D1%82%D0%B8%D1%85%D0%BE', true],
+  ['?quiet', true],
+  ['?QUIET', true],
+  ['#тихо', true],
+  ['?a=1&%D1%82%D0%B8%D1%85%D0%BE', true],
+  ['?quiet=1', true],
+  /* Обратный контроль: обычный адрес и коды уровней звук не глушат. */
+  ['', false],
+  ['?l=ABC', false],
+  ['#l=GNcAUtjICCACSAD', false],
+  ['?quietly', false],
+  ['?тихони', false],
+  /* Битый процент не должен ронять звук. */
+  ['?%E0%A4%A', false],
+];
+
+{
+  const wrong = QUIET_CASES.filter(([text, want]) => wantsQuiet(text) !== want);
+  check('немой запуск понимает оба написания', wrong.length === 0,
+    wrong.length ? wrong.map(([t]) => t || '(пусто)').join(', ') : `${QUIET_CASES.length} случаев`);
+}
 
 /* --- поломкой ------------------------------------------------------- */
 

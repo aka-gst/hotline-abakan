@@ -112,6 +112,31 @@ export const RECIPES = {
   ],
 };
 
+/*
+ * Немой запуск по адресу: ?тихо или ?quiet.
+ *
+ * Проверка вынесена отдельной чистой функцией по двум причинам. Первая: её
+ * можно проверить без браузера, а браузер здесь и подвёл — кириллица в
+ * адресе приезжает закодированной (`?тихо` превращается в
+ * `?%D1%82%D0%B8%D1%85%D0%BE`), и сравнение по сырой строке её не видит.
+ * Замером на бою это поймали как «латиница глушит, кириллица нет».
+ *
+ * Вторая: `decodeURIComponent` бросает на битом проценте, а звук — не то
+ * место, где игра имеет право упасть.
+ *
+ * Границу слова через \b здесь ставить нельзя: после кириллицы это не
+ * граница, и выражение перестаёт срабатывать.
+ */
+export function wantsQuiet(locationText) {
+  let text = String(locationText || '');
+  try {
+    text = decodeURIComponent(text);
+  } catch (error) {
+    /* битый процент в адресе — проверяем что есть */
+  }
+  return /(^|[?&#])(тихо|quiet)(=1|=true)?([&#]|$)/i.test(text);
+}
+
 export function createAudio() {
   let ctx = null;
   let master = null;
@@ -148,8 +173,7 @@ export function createAudio() {
    * можно потерять. Параметр сильнее всего остального и в память не
    * пишется: закрыл вкладку — и обычный адрес снова со звуком.
    */
-  const quiet = /(^|[?&#])(тихо|quiet)(=1|=true)?([&#]|$)/i
-    .test(window.location.search + window.location.hash);
+  const quiet = wantsQuiet(window.location.search + window.location.hash);
 
   try {
     const saved = localStorage.getItem('avto-muted');
