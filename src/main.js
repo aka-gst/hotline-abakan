@@ -18,6 +18,7 @@ import { createRenderer } from './render.js';
 import { createAssets } from './assets.js';
 import { createInput } from './input.js';
 import { createAudio, RECIPES } from './audio.js';
+import { measureRecipe } from './soundmeter.js';
 import { parseHash, buildLink, compare, cleanNick, NICK_KEY } from './challenge.js';
 import { createScore, readBest, writeBest, rankFor } from './score.js';
 
@@ -1137,13 +1138,28 @@ window.avto = {
     };
   },
 
-  /* Сыграть звук по имени; без имени — список имён. */
+  /*
+   * Сыграть звук по имени; без имени — список имён.
+   *
+   * Возвращает расчётные числа тем же измерителем, каким их считает
+   * прогон: чтобы чужой измеритель на живой странице мог сверить выход с
+   * расчётом на одном предмете, а не с числом из чьей-то записки.
+   * Расчёт доказывает ноты, не колонки, — сверка и нужна затем, чтобы
+   * узнать, стоит ли между ними что-то, чего никто не мерил.
+   */
   sfx(name) {
     if (!name) return Object.keys(RECIPES);
     if (!RECIPES[name]) return `нет такого звука; есть: ${Object.keys(RECIPES).join(', ')}`;
     audio.unlock();
     audio.sfx(name);
-    return RECIPES[name];
+    const m = measureRecipe(RECIPES[name]);
+    return {
+      name,
+      расчётныйПик: Math.round(m.peak * 1000) / 1000,
+      расчётныйСредний: Math.round(m.rms * 10000) / 10000,
+      секунды: Math.round(m.seconds * 100) / 100,
+      слои: RECIPES[name].length,
+    };
   },
 
   /* Звук целиком: спросить и переключить. */
