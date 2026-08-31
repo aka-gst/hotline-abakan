@@ -138,12 +138,17 @@ const QUIET_CASES = [
   ['#тихо', true],
   ['?a=1&%D1%82%D0%B8%D1%85%D0%BE', true],
   ['?quiet=1', true],
+  ['?quiet=true', true],
+  ['?tiho', true],
   /* Обратный контроль: обычный адрес и коды уровней звук не глушат. */
   ['', false],
   ['?l=ABC', false],
   ['#l=GNcAUtjICCACSAD', false],
   ['?quietly', false],
+  ['?disquiet', false],
   ['?тихони', false],
+  ['?тихонько', false],
+  ['?%D1%82%D0%B8%D1%85%D0%BE%D0%BD%D1%8C%D0%BA%D0%BE', false],
   /* Битый процент не должен ронять звук. */
   ['?%E0%A4%A', false],
 ];
