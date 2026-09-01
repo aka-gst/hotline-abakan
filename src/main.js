@@ -19,6 +19,7 @@ import { createAssets } from './assets.js';
 import { createInput } from './input.js';
 import { createAudio, RECIPES } from './audio.js';
 import { measureRecipe } from './soundmeter.js';
+import { EXIT_URL, EXIT_QUESTION, needsConfirm } from './exit.js';
 import { parseHash, buildLink, compare, cleanNick, NICK_KEY } from './challenge.js';
 import { createScore, readBest, writeBest, rankFor } from './score.js';
 
@@ -1010,6 +1011,23 @@ if (pauseButton) {
   pauseButton.addEventListener('click', (event) => {
     event.currentTarget.blur();
     if (scene === 'play') pauseScreen();
+  });
+}
+
+/*
+ * Выход на сайт.
+ *
+ * Переход отменяется ПЕРВЫМ действием, до всякого вопроса. Если сначала
+ * спросить, а отменять потом, браузер успевает уйти по ссылке, пока
+ * человек читает вопрос, — и «отмена» отменяет то, что уже случилось.
+ * Порядок здесь и есть вся правка; сам вопрос — мелочь.
+ */
+const homeLink = document.querySelector('.game-home-menu');
+if (homeLink) {
+  homeLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (needsConfirm(scene) && !window.confirm(EXIT_QUESTION)) return;
+    window.location.href = EXIT_URL;
   });
 }
 
