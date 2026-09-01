@@ -19,6 +19,7 @@ import { AIM_CONE, assistAim, closeThreat, meleeSnap } from '../src/aim.js';
 import { buildFlowField } from '../src/ai.js';
 import { blocksMove, encode, decode } from '../src/level.js';
 import { generateLevel } from '../src/generate.js';
+import { showcaseLevel, stageShowcase, showcaseIntent, SHOWCASE_SECONDS } from '../src/showcase.js';
 
 const DT = 1 / 60;
 const idle = { moveX: 0, moveY: 0, aimAngle: null, attack: false };
@@ -951,6 +952,38 @@ function nearest(world) {
   const perFrame = ms / (10 / DT);
   check('шаг мира укладывается в бюджет кадра', perFrame < 1.2,
     `${perFrame.toFixed(3)} мс на кадр при всех врагах в погоне`);
+}
+
+/* --- петля для витрины -------------------------------------------------- */
+
+/*
+ * Карточка на сайте показывает три секунды игры, и это единственное, что
+ * увидит человек, прежде чем решить, открывать её или нет. Поэтому
+ * важно не «сцена работает», а КОГДА в ней что-то происходит.
+ *
+ * Проверка заведена после того, как петля молча испортилась: в неё
+ * влезало одно убийство на 2.62 секунды, то есть две с половиной секунды
+ * из трёх человек смотрел, как кто-то идёт. Ничего не падало — просто
+ * расстояния перестали попадать в долю, а разброс тут ступеньками, а не
+ * плавный.
+ */
+{
+  const world = createWorld(showcaseLevel());
+  stageShowcase(world);
+  const kills = [];
+  let seen = 0;
+  for (let i = 0; i < SHOWCASE_SECONDS / DT; i += 1) {
+    update(world, DT, showcaseIntent(world.time, world));
+    if (world.kills > seen) { seen = world.kills; kills.push(Math.round(world.time * 100) / 100); }
+  }
+
+  check('в петлю влезают два убийства', kills.length === 2, kills.join(', ') || 'ни одного');
+  check('первое — в начале, а не в конце', kills[0] > 0.6 && kills[0] < 1.3,
+    `${kills[0]} с`);
+  check('второе — во второй половине', kills[1] > 1.7 && kills[1] < 2.6,
+    `${kills[1]} с`);
+  check('петля не кончается пустотой', SHOWCASE_SECONDS - kills[kills.length - 1] > 0.5,
+    `${(SHOWCASE_SECONDS - kills[kills.length - 1]).toFixed(2)} с после последнего`);
 }
 
 /* --- повадка «рывок»: замах, бросок, открытая спина -------------------- */
