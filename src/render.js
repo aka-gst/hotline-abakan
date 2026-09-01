@@ -1211,6 +1211,55 @@ export function createRenderer(canvas, assets = null) {
         g.restore();
       }
 
+      /*
+       * Рывок. Три состояния — и все три обязаны читаться, иначе повадка
+       * превращается в «он вдруг оказался рядом», то есть в несправедливость.
+       *
+       * Замах — стрела, растущая от врага к игроку: показывает и что
+       * будет, и куда. Полёт — след позади. Открытая спина — белая дуга
+       * со стороны спины, тот же язык, что у метки тихого удара.
+       */
+      if (enemy.tell > 0) {
+        const готовность = 1 - enemy.tell / 0.36;
+        const длина = 18 + готовность * 46;
+        g.save();
+        g.translate(enemy.x, enemy.y);
+        g.rotate(enemy.angle);
+        g.strokeStyle = `rgba(255,45,90,${0.35 + готовность * 0.55})`;
+        g.lineWidth = 2 + готовность * 2;
+        g.beginPath();
+        g.moveTo(BODY + 2, 0);
+        g.lineTo(BODY + длина, 0);
+        g.moveTo(BODY + длина, 0);
+        g.lineTo(BODY + длина - 9, -6);
+        g.moveTo(BODY + длина, 0);
+        g.lineTo(BODY + длина - 9, 6);
+        g.stroke();
+        g.restore();
+      }
+
+      if (enemy.dash > 0) {
+        g.save();
+        g.strokeStyle = 'rgba(255,45,90,.5)';
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(enemy.x - Math.cos(enemy.dashAngle) * 26, enemy.y - Math.sin(enemy.dashAngle) * 26);
+        g.lineTo(enemy.x, enemy.y);
+        g.stroke();
+        g.restore();
+      }
+
+      if (enemy.open > 0) {
+        const пульс = 0.4 + Math.sin(world.time * 14) * 0.25;
+        g.save();
+        g.strokeStyle = `rgba(255,255,255,${пульс})`;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(enemy.x, enemy.y, BODY + 5, enemy.angle + 2.2, enemy.angle - 2.2);
+        g.stroke();
+        g.restore();
+      }
+
       /* Замах — единственное предупреждение, и оно должно быть заметным. */
       if (enemy.windup > 0.05) {
         g.strokeStyle = `rgba(255,45,90,${Math.min(0.9, enemy.windup * 2.4)})`;

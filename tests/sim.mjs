@@ -953,6 +953,71 @@ function nearest(world) {
     `${perFrame.toFixed(3)} мс на кадр при всех врагах в погоне`);
 }
 
+/* --- повадка «рывок»: замах, бросок, открытая спина -------------------- */
+
+/*
+ * Рывок обязан быть читаемым и наказуемым, иначе это просто «он вдруг
+ * оказался рядом». Проверяются три вещи, и каждая — про игрока:
+ *
+ * 1. перед броском есть замах, и он длится столько, чтобы человек успел;
+ * 2. направление берётся в момент прыжка и дальше НЕ правится — иначе
+ *    шаг в сторону перестаёт быть ответом, а рывок превращается в
+ *    самонаведение;
+ * 3. после броска враг какое-то время стоит открытым.
+ */
+function rivok({ dodge }) {
+  const world = createWorld(CAMPAIGN[0]);
+  const player = world.player;
+  player.weapon = 'bat';
+
+  /* Оставляем одного рывкового и ставим его перед игроком. */
+  const dasher = world.enemies.find((e) => e.temper === 'рывок');
+  for (const e of world.enemies) if (e !== dasher) e.alive = false;
+  dasher.x = player.x + 130;
+  dasher.y = player.y;
+  dasher.home = { x: dasher.x, y: dasher.y };
+  dasher.weapon = null;
+  dasher.state = 'chase';
+  dasher.notice = 1;
+  dasher.lost = 0;
+
+  const seen = { tell: 0, dash: 0, open: 0 };
+  let minGap = Infinity;
+  let dodged = false;
+
+  for (let i = 0; i < 4 / DT; i += 1) {
+    if (dasher.tell > 0) seen.tell += 1;
+    if (dasher.dash > 0) { seen.dash += 1; minGap = Math.min(minGap, Math.hypot(dasher.x - player.x, dasher.y - player.y)); }
+    if (dasher.open > 0) seen.open += 1;
+
+    const intent = { moveX: 0, moveY: 0, aimAngle: 0, attack: false };
+    /* Шаг в сторону делается по замаху — то есть по тому, что видно. */
+    if (dodge && dasher.tell > 0) { intent.moveY = -1; dodged = true; }
+    update(world, DT, intent);
+    /* Выходим, когда открытая спина КОНЧИЛАСЬ, а не через шесть кадров
+       после её начала: первая версия обрывала счёт на 0.12 с и объявляла
+       поломкой исправное окно в 0.55. Мерка, которая сама себя обрезает,
+       врёт увереннее всего. */
+    if (seen.open > 0 && dasher.open <= 0) break;
+  }
+  return { ...seen, minGap: Math.round(minGap), dodged, hp: player.hp };
+}
+
+{
+  const прямо = rivok({ dodge: false });
+  check('рывок предупреждает замахом', прямо.tell * DT > 0.25,
+    `${(прямо.tell * DT).toFixed(2)} с замаха`);
+  check('после броска враг стоит открытым', прямо.open * DT > 0.4,
+    `${(прямо.open * DT).toFixed(2)} с открытой спины`);
+  check('стоял на месте — достали', прямо.minGap < 40, `подошёл на ${прямо.minGap}`);
+
+  const вбок = rivok({ dodge: true });
+  check('шаг в сторону по замаху уводит с линии', вбок.dodged && вбок.minGap > прямо.minGap,
+    `мимо на ${вбок.minGap} против ${прямо.minGap} без уворота`);
+  check('уворот стоит здоровья дешевле', вбок.hp >= прямо.hp,
+    `hp ${вбок.hp} против ${прямо.hp}`);
+}
+
 /* --- исход не зависит от частоты кадров ------------------------------- */
 
 /*

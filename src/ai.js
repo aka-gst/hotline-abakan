@@ -22,6 +22,22 @@ const FEEL_RANGE = 58;     /* за спиной, но вплотную — за�
 const NOTICE_TIME = 0.2;   /* столько взгляда нужно, чтобы понять */
 const FORGET_TIME = 3.5;
 
+/*
+ * Рывок. Три отрезка времени, и все три должны читаться глазами:
+ * замах — бросок — открытая спина. Числа подобраны так, чтобы шаг в
+ * сторону успевал сделать человек, а не только машина: 0.36 секунды на
+ * чтение это примерно два удара сердца.
+ *
+ * Окно наказания (0.55) длиннее замаха нарочно: успел увернуться —
+ * успеешь и ударить, иначе рывок наказывает, но не награждает.
+ */
+const DASH_TELL = 0.36;
+const DASH_TIME = 0.34;
+const DASH_OPEN = 0.55;
+const DASH_SPEED = 2.4;
+const DASH_NEAR = 46;    /* ближе — рывок не нужен, и так достанет */
+const DASH_FAR = 200;    /* дальше — не добежит и выдохнется зря */
+
 const NEIGHBOURS = [
   [1, 0], [-1, 0], [0, 1], [0, -1],
   [1, 1], [1, -1], [-1, 1], [-1, -1],
@@ -194,6 +210,70 @@ export function thinkEnemy(world, enemy, dt, speed) {
       }
 
       const weapon = WEAPONS[enemy.weapon] || null;
+
+      /*
+       * Рывок разбирается до всего остального: пока он идёт, враг не
+       * ходит по волне и не выбирает приёмов — он летит.
+       *
+       * Порядок здесь важнее содержания. Стой эта проверка ниже, до неё
+       * не доходило бы в самом частом случае — когда цель в пределах
+       * удара, — и рывок бы просто не случался.
+       */
+      if (enemy.temper === 'рывок' && !weapon) {
+        if (enemy.open > 0) {
+          /* Открытая спина: стоит, не бьёт, и это шанс игрока. */
+          enemy.open -= dt;
+          enemy.windup = 0;
+          break;
+        }
+
+        if (enemy.dash > 0) {
+          enemy.dash -= dt;
+          result.vx = Math.cos(enemy.dashAngle) * speed.run * DASH_SPEED;
+          result.vy = Math.sin(enemy.dashAngle) * speed.run * DASH_SPEED;
+          /* Достал по дороге — бьёт; промахнулся — встаёт открытым. */
+          if (dist < (MOVES.hand.reach + BODY - 6) && enemy.cooldown <= 0) result.attack = true;
+          if (enemy.dash <= 0) enemy.open = DASH_OPEN;
+          break;
+        }
+
+        if (enemy.tell > 0) {
+          /* Замах: стоит на месте и доворачивает — по этому его и читают. */
+          enemy.tell -= dt;
+          enemy.angle = turnToward(enemy.angle, toPlayer, dt * 5);
+          if (enemy.tell <= 0) {
+            enemy.dash = DASH_TIME;
+            /* Направление берётся в момент прыжка и дальше не правится:
+               иначе рывок превращается в самонаведение, и шаг в сторону
+               перестаёт быть ответом. */
+            enemy.dashAngle = toPlayer;
+            world.events.push({ type: 'dash' });
+          }
+          break;
+        }
+
+        if (visible && dist > DASH_NEAR && dist < DASH_FAR
+            && hasSight(world, enemy.x, enemy.y, player.x, player.y)) {
+          enemy.tell = DASH_TELL;
+          break;
+        }
+      }
+
+      /*
+       * Обход. Идёт не в игрока, а в точку сбоку от него, и только
+       * вблизи заворачивает внутрь. Двое таких приходят с разных сторон
+       * вместо того, чтобы толкаться в одной двери.
+       */
+      let flank = null;
+      if (enemy.temper === 'обход' && !weapon && visible && dist > 110
+          && hasSight(world, enemy.x, enemy.y, player.x, player.y)) {
+        const across = toPlayer + Math.PI / 2 * (enemy.side || 1);
+        flank = {
+          x: player.x + Math.cos(across) * 90,
+          y: player.y + Math.sin(across) * 90,
+        };
+      }
+
       enemy.angle = turnToward(enemy.angle, toPlayer, dt * (visible ? 7 : 3.5));
 
       if (weapon && weapon.kind === 'gun') {
@@ -274,11 +354,22 @@ export function thinkEnemy(world, enemy, dt, speed) {
       }
 
       if (dist > reach) {
-        const step = (visible && hasSight(world, enemy.x, enemy.y, player.x, player.y))
-          ? { x: Math.cos(toPlayer), y: Math.sin(toPlayer) }
-          : (flowStep(world, enemy) || { x: 0, y: 0 });
-        result.vx = step.x * speed.run;
-        result.vy = step.y * speed.run;
+        const step = flank
+          ? flowStepToward(world, enemy, flank)
+          : (visible && hasSight(world, enemy.x, enemy.y, player.x, player.y))
+            ? { x: Math.cos(toPlayer), y: Math.sin(toPlayer) }
+            : (flowStep(world, enemy) || { x: 0, y: 0 });
+        /*
+         * Рывковый ходит шагом, а не бегом. Тогда он не может просто
+         * догнать и молотить: чтобы достать, ему приходится бросаться,
+         * то есть показать замах и открыться после. Пока он бегал
+         * наравне со всеми, рывок случался один раз на подходе и был
+         * украшением — замер показал десять кадров замаха на сорок пять
+         * секунд боя.
+         */
+        const темп = (enemy.temper === 'рывок' && !weapon) ? speed.walk : speed.run;
+        result.vx = step.x * темп;
+        result.vy = step.y * темп;
         enemy.windup = 0;
       } else if (enemy.cooldown <= 0) {
         /*
