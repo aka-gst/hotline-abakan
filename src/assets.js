@@ -187,6 +187,21 @@ export function createAssets(base = 'assets/') {
       return image(manifest && manifest.items && manifest.items[name]);
     },
 
+    /*
+     * Обстановка картинками. Ход есть, но в манифесте пусто, и это
+     * нарочно: присланные четырнадцать картинок мебели — коричневые
+     * ромбы с полоской, в игре они читаются как мусор. Пока обстановка
+     * рисуется кодом (drawProp в render.js).
+     *
+     * Придут годные — достаточно вписать их в манифест разделом props
+     * и позвать отсюда; ничего больше менять не придётся. Размер брать у
+     * самой картинки, а не вторым списком в манифесте: два списка
+     * однажды разойдутся.
+     */
+    prop(name) {
+      return image(manifest && manifest.props && manifest.props[name]);
+    },
+
     /* Раскадровка приёма: картинка, число кадров и размер кадра. */
     move(name) {
       const entry = manifest && manifest.moves && manifest.moves[name];
