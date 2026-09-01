@@ -1,5 +1,5 @@
 /*
- * ОДИН УДАР — сцена для витрины.
+ * HOTLINE ABAKAN — сцена для витрины.
  *
  * Карточка игры на сайте показывает не снимок, а короткую петлю с самым
  * ярким моментом. Готовое видео отсюда не отдаётся: игра даёт снаряд —
@@ -44,7 +44,7 @@ export const SHOWCASE_SECONDS = 3;
 
 export function showcaseLevel() {
   const level = fromAscii(ROOM, { theme: 0, track: 0 });
-  level.title = 'ОДИН УДАР';
+  level.title = 'HOTLINE ABAKAN';
   level.call = '';
   return level;
 }
