@@ -954,6 +954,56 @@ function nearest(world) {
     `${perFrame.toFixed(3)} мс на кадр при всех врагах в погоне`);
 }
 
+/* --- три абаканских ближних отличаются делом, а не картинкой ----------- */
+
+/*
+ * Оружие, которое отличается только именем и иконкой, — это не выбор, а
+ * лишний экран. Поэтому проверяется не наличие в таблице, а то, что
+ * каждым дерутся по-разному: лопатой косят нескольких, клюшкой достают
+ * оттуда, откуда до тебя не дотянутся, лом громче всех и сзывает этаж.
+ */
+function odnimUdarom(weapon, spread) {
+  const world = createWorld(CAMPAIGN[0]);
+  const player = world.player;
+  player.weapon = weapon;
+  player.cooldown = 0;
+  player.angle = 0;
+  const three = world.enemies.slice(0, 3);
+  for (const e of world.enemies) if (!three.includes(e)) e.alive = false;
+  three.forEach((enemy, i) => {
+    const a = (i - 1) * spread;
+    enemy.x = player.x + Math.cos(a) * 34;
+    enemy.y = player.y + Math.sin(a) * 34;
+    enemy.home = { x: enemy.x, y: enemy.y };
+    enemy.state = 'idle';
+    enemy.cooldown = 99;
+  });
+  update(world, DT, { moveX: 0, moveY: 0, aimAngle: 0, attack: true });
+  return world.kills;
+}
+
+{
+  check('лопатой ложатся все, кто попал в дугу', odnimUdarom('shovel', 0.5) === 3,
+    `${odnimUdarom('shovel', 0.5)} из трёх, стоящих плотно`);
+  check('веером пошире лопата достаёт не всех', odnimUdarom('shovel', 1.1) === 2,
+    `${odnimUdarom('shovel', 1.1)} из трёх — дуга не круговая`);
+
+  /* Отрицательный контроль: мах — привилегия лопаты, а не всех подряд. */
+  const прочие = ['bat', 'crowbar', 'hockey', 'pipe'].map((w) => odnimUdarom(w, 0.5));
+  check('остальные бьют одного', прочие.every((k) => k === 1), прочие.join(', '));
+
+  /* Клюшка достаёт оттуда, куда безоружный не дотянется. */
+  const hockey = WEAPONS.hockey.reach;
+  const bare = MOVES.hand.reach;
+  check('клюшкой бьёшь вне их досягаемости', hockey > bare + 20,
+    `${hockey} против ${bare} у голых рук`);
+
+  /* Лом громче всех: за него платят вниманием этажа. */
+  const шум = Object.values(WEAPONS).filter((w) => w.kind === 'melee').map((w) => w.noise);
+  check('лом — самое громкое из ближнего', WEAPONS.crowbar.noise === Math.max(...шум),
+    `${WEAPONS.crowbar.noise} против ${Math.max(...шум.filter((n) => n !== WEAPONS.crowbar.noise))}`);
+}
+
 /* --- петля для витрины -------------------------------------------------- */
 
 /*

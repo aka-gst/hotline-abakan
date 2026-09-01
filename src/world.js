@@ -180,6 +180,36 @@ export const WEAPONS = {
     reach: 30, arc: 1.8, cooldown: 0.16, lethal: true, noise: 90, breaks: true,
   },
 
+  /*
+   * Лопата. Самая широкая дуга в игре: одним махом ложатся двое, если
+   * встали рядом. Платится скоростью — откат почти вдвое дольше биты,
+   * поэтому промах наказывается.
+   */
+  shovel: {
+    id: 'shovel', name: 'ЛОПАТА', kind: 'melee',
+    reach: 38, arc: 2.7, cooldown: 0.28, lethal: true, noise: 120, sweep: true,
+  },
+
+  /*
+   * Лом. Тяжёлый и громкий: шум 150 против 110 у биты, то есть на него
+   * сбегается больше народу. Взамен достаёт сквозь рывок — дуга узкая, но
+   * откат короче лопаты.
+   */
+  crowbar: {
+    id: 'crowbar', name: 'ЛОМ', kind: 'melee',
+    reach: 34, arc: 1.6, cooldown: 0.20, lethal: true, noise: 150,
+  },
+
+  /*
+   * Клюшка. Достаёт дальше всего — 52 против 40 у биты, — и это
+   * единственное оружие, которым можно бить, стоя вне их досягаемости.
+   * Дуга узкая: мимо промахиваешься чаще.
+   */
+  hockey: {
+    id: 'hockey', name: 'КЛЮШКА', kind: 'melee',
+    reach: 52, arc: 1.3, cooldown: 0.22, lethal: true, noise: 95,
+  },
+
   pistol: {
     id: 'pistol', name: 'ПИСТОЛЕТ', kind: 'gun',
     cooldown: 0.16, clip: 12, speed: 900, spread: 0.03, noise: 460,
@@ -506,7 +536,10 @@ export function createWorld(level) {
 
     /* Оружие на полу. Тип из уровня — имя из таблицы: добавить новое
        оружие значит дописать строку здесь и в словаре уровня. */
-    const dropped = { 3: 'bat', 4: 'pistol', 5: 'shotgun', 7: 'knife', 8: 'pipe', 9: 'bottle' }[entity.type];
+    const dropped = {
+      3: 'bat', 4: 'pistol', 5: 'shotgun', 7: 'knife', 8: 'pipe', 9: 'bottle',
+      11: 'shovel', 12: 'crowbar', 13: 'hockey',
+    }[entity.type];
     if (dropped) {
       world.pickups.push({
         weapon: dropped, x, y, angle: rand(0, 6.28),
@@ -895,6 +928,28 @@ function swingMelee(world, attacker, from) {
     target = candidate;
   }
 
+  /*
+   * Мах. Обычное оружие достаёт одного — ближайшего в дуге, — и это
+   * правильно: иначе толпа перестаёт быть проблемой. Лопата — исключение
+   * и единственное: ею косят всех, кто попал в дугу, и ради этого её и
+   * поднимают, когда в дверь лезут трое.
+   *
+   * Цена уже заложена в откате: 0.28 против 0.18 у биты. Промахнулся —
+   * стоишь.
+   */
+  const sweep = [];
+  if (weapon.sweep && target) {
+    for (const candidate of candidates) {
+      if (candidate === target) continue;
+      const dist = Math.hypot(candidate.x - attacker.x, candidate.y - attacker.y);
+      if (dist > weapon.reach + BODY) continue;
+      const toTarget = Math.atan2(candidate.y - attacker.y, candidate.x - attacker.x);
+      if (Math.abs(angleDelta(attacker.angle, toTarget)) > weapon.arc / 2) continue;
+      if (!hasSight(world, attacker.x, attacker.y, candidate.x, candidate.y)) continue;
+      sweep.push(candidate);
+    }
+  }
+
   const connected = Boolean(target);
   const silent = from === 'player' && fromBehind(world, attacker, target);
 
@@ -925,6 +980,23 @@ function swingMelee(world, attacker, from) {
       if (weapon.breaks) breakWeapon(world, attacker, toTarget, from);
     } else {
       knockDown(world, target, toTarget);
+    }
+
+    /*
+     * Задетые махом. Тихим такой удар не бывает: если рядом стоят двое,
+     * второй увидит первого — поэтому со спины здесь не считается, и
+     * доля тоже: она награда за точность, а не за ширину.
+     */
+    for (const also of sweep) {
+      if (!also.alive) continue;
+      const toAlso = Math.atan2(also.y - attacker.y, also.x - attacker.x);
+      if (also === world.player) killPlayer(world, toAlso);
+      else if (weapon.lethal || also.downed > 0) {
+        killEnemy(world, also, toAlso, 'melee', {
+          by: from, weapon: attacker.weapon, execution: also.downed > 0,
+          silent: false, beat: false,
+        });
+      } else knockDown(world, also, toAlso);
     }
   }
 
