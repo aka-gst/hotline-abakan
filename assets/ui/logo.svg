@@ -17,5 +17,4 @@
   </filter>
   <text x="400" y="160" font-family="'Courier New', monospace, sans-serif" font-weight="900" font-size="86" fill="#76ff9f" text-anchor="middle" filter="url(#glow)" stroke="#ff1f8f" stroke-width="3">HOTLINE</text>
   <text x="400" y="248" font-family="'Courier New', monospace, sans-serif" font-weight="900" font-size="86" fill="#76ff9f" text-anchor="middle" filter="url(#glow)" stroke="#ff1f8f" stroke-width="3">ABAKAN</text>
-  <text x="400" y="312" font-family="'Courier New', monospace, sans-serif" font-weight="bold" font-size="30" fill="#ffe06b" text-anchor="middle" letter-spacing="6">ОДИН УДАР // АБАКАН</text>
 </svg>
