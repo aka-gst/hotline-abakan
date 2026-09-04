@@ -1,5 +1,5 @@
 /*
- * ОДИН УДАР — отрисовка.
+ * HOTLINE ABAKAN — отрисовка.
  *
  * Вид сверху, всё нарисовано фигурами, а не спрайтами: ни одного
  * заимствованного пикселя, зато палитру и пропорции можно менять
@@ -28,7 +28,137 @@ import { TILE_SIZE, BODY, WEAPONS, MOVES, BARE_HP, BEAT_PERIOD, backstabReady, b
  * чёрная масса с одной ядовитой кромкой, и весь контраст держится на этой
  * паре, а не на светотени.
  */
-export const THEMES = [
+export /*
+ * Что стоит в комнатах каждой темы. Порядок тем тот же, что у THEMES
+ * ниже: бар, серверная, двор, квартира, гаражи, рынок, дом культуры,
+ * почта.
+ *
+ * Список на тему нужен затем, чтобы вещи были уместными: диван в
+ * серверной и стойка серверов в баре читаются как ошибка, а не как
+ * обстановка.
+ */
+const PROPS = [
+  ['counter', 'stools', 'crate'],   /* бар */
+  ['rack', 'crate', 'rack'],        /* серверная */
+  ['crate', 'bin', 'crate'],        /* двор */
+  ['sofa', 'tv', 'sofa'],           /* квартира */
+  ['crate', 'barrel', 'crate'],     /* гаражи */
+  ['counter', 'crate', 'bin'],      /* рынок */
+  ['sofa', 'counter', 'tv'],        /* дом культуры */
+  ['counter', 'crate', 'bin'],      /* почта */
+];
+
+/*
+ * Обстановка рисуется кодом теми же цветами, что и тема этажа, — иначе
+ * она выглядит наклейкой поверх комнаты, а не её частью.
+ *
+ * Каждый вид отличается силуэтом, а не только цветом: стойка длинная и
+ * ровная, ящики квадратные с крестом, стойка серверов высокая с
+ * огоньками, диван с толстой спинкой. На сорока пикселях цвет
+ * различается хуже формы.
+ */
+function drawProp(g, px, py, runLen, themeIndex, seed, theme) {
+  const list = PROPS[themeIndex % PROPS.length];
+  const kind = list[Math.abs(seed) % list.length];
+  const w = runLen * TILE_SIZE;
+  const h = TILE_SIZE;
+
+  g.save();
+  g.translate(px, py);
+
+  /* Тень под всем, что стоит: без неё предметы плавают. */
+  g.fillStyle = 'rgba(0,0,0,.45)';
+  g.fillRect(2, 5, w - 2, h - 2);
+
+  g.fillStyle = theme.table;
+  g.strokeStyle = theme.tableEdge;
+  g.lineWidth = 2;
+
+  if (kind === 'counter') {
+    g.beginPath();
+    g.roundRect(1, 3, w - 2, h - 6, 4);
+    g.fill();
+    g.stroke();
+    /* Столешница: светлая полоса вдоль — по ней стойка и узнаётся. */
+    g.fillStyle = theme.tableEdge;
+    g.globalAlpha = 0.5;
+    g.fillRect(3, 5, w - 6, 3);
+    g.globalAlpha = 1;
+  } else if (kind === 'crate') {
+    for (let i = 0; i < runLen; i += 1) {
+      const bx = i * TILE_SIZE + 2;
+      g.beginPath();
+      g.rect(bx, 4, TILE_SIZE - 4, h - 8);
+      g.fill();
+      g.stroke();
+      g.beginPath();
+      g.moveTo(bx, 4); g.lineTo(bx + TILE_SIZE - 4, h - 4);
+      g.moveTo(bx + TILE_SIZE - 4, 4); g.lineTo(bx, h - 4);
+      g.stroke();
+    }
+  } else if (kind === 'rack') {
+    g.beginPath();
+    g.rect(2, 1, w - 4, h - 3);
+    g.fill();
+    g.stroke();
+    /* Огоньки: по два на поле, вразнобой — стойка сразу читается. */
+    for (let i = 0; i < runLen * 2; i += 1) {
+      g.fillStyle = i % 3 === 0 ? '#76ff9f' : '#ff2d5a';
+      g.fillRect(6 + i * (TILE_SIZE / 2), 6 + (i % 2) * 8, 3, 3);
+    }
+  } else if (kind === 'sofa') {
+    g.beginPath();
+    g.roundRect(1, 6, w - 2, h - 8, 5);
+    g.fill();
+    g.stroke();
+    /* Спинка сверху — по ней диван отличается от стойки. */
+    g.beginPath();
+    g.roundRect(1, 2, w - 2, 7, 3);
+    g.fill();
+    g.stroke();
+  } else if (kind === 'tv') {
+    g.beginPath();
+    g.rect(4, 6, w - 8, h - 12);
+    g.fill();
+    g.stroke();
+    g.fillStyle = 'rgba(122,217,255,.45)';
+    g.fillRect(7, 9, w - 14, h - 18);
+  } else if (kind === 'stools') {
+    for (let i = 0; i < runLen; i += 1) {
+      g.beginPath();
+      g.arc(i * TILE_SIZE + TILE_SIZE / 2, h / 2, TILE_SIZE / 2 - 4, 0, 6.29);
+      g.fill();
+      g.stroke();
+    }
+  } else if (kind === 'barrel') {
+    for (let i = 0; i < runLen; i += 1) {
+      const cx = i * TILE_SIZE + TILE_SIZE / 2;
+      g.beginPath();
+      g.ellipse(cx, h / 2, TILE_SIZE / 2 - 3, h / 2 - 3, 0, 0, 6.29);
+      g.fill();
+      g.stroke();
+      g.beginPath();
+      g.moveTo(cx - 8, h / 2); g.lineTo(cx + 8, h / 2);
+      g.stroke();
+    }
+  } else {
+    /* bin: мусорный бак — узкий и с крышкой. */
+    for (let i = 0; i < runLen; i += 1) {
+      const bx = i * TILE_SIZE + 5;
+      g.beginPath();
+      g.rect(bx, 7, TILE_SIZE - 10, h - 10);
+      g.fill();
+      g.stroke();
+      g.fillStyle = theme.tableEdge;
+      g.fillRect(bx - 2, 4, TILE_SIZE - 6, 4);
+      g.fillStyle = theme.table;
+    }
+  }
+
+  g.restore();
+}
+
+const THEMES = [
   {
     name: 'бар',
     floor: '#4a1f63',
@@ -334,13 +464,28 @@ export function createRenderer(canvas, assets = null) {
         }
 
         if (tile === TILE.TABLE) {
-          bakedCtx.fillStyle = 'rgba(0,0,0,.5)';
-          bakedCtx.fillRect(px + 4, py + 6, TILE_SIZE - 4, TILE_SIZE - 4);
-          bakedCtx.fillStyle = theme.table;
-          bakedCtx.fillRect(px + 2, py + 2, TILE_SIZE - 4, TILE_SIZE - 4);
-          bakedCtx.strokeStyle = theme.tableEdge;
-          bakedCtx.lineWidth = 2;
-          bakedCtx.strokeRect(px + 3, py + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+          /*
+           * Обстановка. Раньше здесь был оранжевый прямоугольник на
+           * каждое поле, и ряд из трёх читался как три одинаковых кубика.
+           * Теперь ряд определяется целиком и рисуется одной вещью —
+           * стойкой, диваном, ящиками, — по теме этажа.
+           *
+           * Рисуется кодом, а не картинкой, и это решение стоит объяснить.
+           * Картинки обстановки в наборе есть, все четырнадцать, и они
+           * подключены (assets.prop). Но каждая из них — коричневый ромб
+           * с полоской: в игре они читаются как мусор, а не как мебель.
+           * Тот же случай, что с фигурками людей, которых пришлось
+           * рисовать кодом. Придут годные — здесь останется одна ветка.
+           *
+           * Вид выбирается по клетке, а не броском: комната должна
+           * выглядеть одинаково при каждом заходе, иначе её нельзя ни
+           * запомнить, ни снять для витрины.
+           */
+          if (at(-1, 0) !== TILE.TABLE) {
+            let runLen = 1;
+            while (at(runLen, 0) === TILE.TABLE) runLen += 1;
+            drawProp(bakedCtx, px, py, runLen, world.level.theme || 0, x + y, theme);
+          }
         }
 
         if (tile === TILE.GLASS) {
@@ -1208,6 +1353,55 @@ export function createRenderer(canvas, assets = null) {
         g.beginPath();
         g.ellipse(enemy.x, enemy.y, BODY + 3, BODY + 2, 0, 0, 6.29);
         g.fill();
+        g.restore();
+      }
+
+      /*
+       * Рывок. Три состояния — и все три обязаны читаться, иначе повадка
+       * превращается в «он вдруг оказался рядом», то есть в несправедливость.
+       *
+       * Замах — стрела, растущая от врага к игроку: показывает и что
+       * будет, и куда. Полёт — след позади. Открытая спина — белая дуга
+       * со стороны спины, тот же язык, что у метки тихого удара.
+       */
+      if (enemy.tell > 0) {
+        const готовность = 1 - enemy.tell / 0.36;
+        const длина = 18 + готовность * 46;
+        g.save();
+        g.translate(enemy.x, enemy.y);
+        g.rotate(enemy.angle);
+        g.strokeStyle = `rgba(255,45,90,${0.35 + готовность * 0.55})`;
+        g.lineWidth = 2 + готовность * 2;
+        g.beginPath();
+        g.moveTo(BODY + 2, 0);
+        g.lineTo(BODY + длина, 0);
+        g.moveTo(BODY + длина, 0);
+        g.lineTo(BODY + длина - 9, -6);
+        g.moveTo(BODY + длина, 0);
+        g.lineTo(BODY + длина - 9, 6);
+        g.stroke();
+        g.restore();
+      }
+
+      if (enemy.dash > 0) {
+        g.save();
+        g.strokeStyle = 'rgba(255,45,90,.5)';
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(enemy.x - Math.cos(enemy.dashAngle) * 26, enemy.y - Math.sin(enemy.dashAngle) * 26);
+        g.lineTo(enemy.x, enemy.y);
+        g.stroke();
+        g.restore();
+      }
+
+      if (enemy.open > 0) {
+        const пульс = 0.4 + Math.sin(world.time * 14) * 0.25;
+        g.save();
+        g.strokeStyle = `rgba(255,255,255,${пульс})`;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(enemy.x, enemy.y, BODY + 5, enemy.angle + 2.2, enemy.angle - 2.2);
+        g.stroke();
         g.restore();
       }
 

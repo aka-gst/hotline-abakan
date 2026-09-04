@@ -52,7 +52,15 @@ html, body {
   top: max(10px, env(safe-area-inset-top));
   right: max(10px, env(safe-area-inset-right));
   z-index: 1000;
-  display: block;
+  /*
+   * Палец промахивается по всему, что меньше сорока четырёх точек, —
+   * это не рекомендация Apple ради красоты, а размер подушечки. Было
+   * 74×34, и владелец жал мимо.
+   */
+  display: grid;
+  place-items: center;
+  min-width: 74px;
+  min-height: 44px;
   padding: 10px 12px;
   border: 1px solid var(--acid);
   background: #0b1010f2;
@@ -74,7 +82,9 @@ html, body {
 }
 
 @media (max-height: 600px) and (orientation: landscape) {
-  .game-home-menu { padding: 8px 10px; }
+  /* В лежачем телефоне высоты мало, но сорок четыре точки держим: это
+     нижняя граница попадания пальцем, а не украшение. */
+  .game-home-menu { padding: 8px 10px; min-height: 44px; }
 }
 
 
@@ -547,15 +557,15 @@ body[data-showcase="1"] .combo { display: none; }
   .hud-pause { display: block; }
 
   /*
-   * Во время боя «НА САЙТ» и «ЗВУК» уходят с экрана.
+   * Во время боя «ЗВУК» уходит с экрана: случайное касание включает
+   * музыку посреди тишины, а вернуть её тише уже не выйдет.
    *
-   * Кольца действия играть не мешают: они контурные, поле сквозь них
-   * видно, и лежат там, где и должен лежать большой палец. А эти две —
-   * служебные, и случайное касание по ним стоит партии: одно уводит с
-   * сайта, другое включает музыку посреди тишины. Между попытками они на
-   * месте, и туда же ведёт пауза.
+   * «НА САЙТ» раньше пряталась рядом с ним — по той же причине, только
+   * там цена была партия. Теперь она остаётся на месте всегда, а
+   * случайное касание перехватывает вопрос (см. src/exit.js): промах
+   * стоит одного «нет», а не партии. Требование владельца: кнопка
+   * должна быть видна из боя, а не только между попытками.
    */
-  body[data-scene="play"] .game-home-menu,
   body[data-scene="play"] .mute { display: none; }
 
   /* Тост поднят выше: внизу лежит палец, который ведёт. */
@@ -882,16 +892,6 @@ body[data-showcase="1"] .combo { display: none; }
 @media (max-width: 430px) {
   .hud { flex-direction: column; }
   .hud-slot { padding: 6px 9px; }
-  /* Иконка оружия: пиксели не сглаживаем, иначе бита превращается в пятно. */
-.weapon-icon {
-  display: block;
-  width: 44px;
-  height: 22px;
-  margin-bottom: 4px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
 .hud-slot b { font-size: 11px; }
 }
 
@@ -903,9 +903,5 @@ body[data-showcase="1"] .combo { display: none; }
   .veil-score { padding: 10px 12px; }
   .score-lines li, .veil-score li { padding: 2px 0; }
   .rank b, #rankLetter { font-size: 34px; }
-  .veil-stats span[data-warn="1"] {
-  color: var(--pink);
-}
-
 .veil-stats { margin-bottom: 12px; }
 }

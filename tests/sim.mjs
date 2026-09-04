@@ -1,5 +1,5 @@
 /*
- * ОДИН УДАР — прогон боя без браузера.
+ * HOTLINE ABAKAN — прогон боя без браузера.
  *
  *   node avto/tests/sim.mjs
  *
@@ -19,6 +19,7 @@ import { AIM_CONE, assistAim, closeThreat, meleeSnap } from '../src/aim.js';
 import { buildFlowField } from '../src/ai.js';
 import { blocksMove, encode, decode } from '../src/level.js';
 import { generateLevel } from '../src/generate.js';
+import { showcaseLevel, stageShowcase, showcaseIntent, SHOWCASE_SECONDS } from '../src/showcase.js';
 
 const DT = 1 / 60;
 const idle = { moveX: 0, moveY: 0, aimAngle: null, attack: false };
@@ -951,6 +952,206 @@ function nearest(world) {
   const perFrame = ms / (10 / DT);
   check('шаг мира укладывается в бюджет кадра', perFrame < 1.2,
     `${perFrame.toFixed(3)} мс на кадр при всех врагах в погоне`);
+}
+
+/* --- три абаканских ближних отличаются делом, а не картинкой ----------- */
+
+/*
+ * Оружие, которое отличается только именем и иконкой, — это не выбор, а
+ * лишний экран. Поэтому проверяется не наличие в таблице, а то, что
+ * каждым дерутся по-разному: лопатой косят нескольких, клюшкой достают
+ * оттуда, откуда до тебя не дотянутся, лом громче всех и сзывает этаж.
+ */
+function odnimUdarom(weapon, spread) {
+  const world = createWorld(CAMPAIGN[0]);
+  const player = world.player;
+  player.weapon = weapon;
+  player.cooldown = 0;
+  player.angle = 0;
+  const three = world.enemies.slice(0, 3);
+  for (const e of world.enemies) if (!three.includes(e)) e.alive = false;
+  three.forEach((enemy, i) => {
+    const a = (i - 1) * spread;
+    enemy.x = player.x + Math.cos(a) * 34;
+    enemy.y = player.y + Math.sin(a) * 34;
+    enemy.home = { x: enemy.x, y: enemy.y };
+    enemy.state = 'idle';
+    enemy.cooldown = 99;
+  });
+  update(world, DT, { moveX: 0, moveY: 0, aimAngle: 0, attack: true });
+  return world.kills;
+}
+
+{
+  check('лопатой ложатся все, кто попал в дугу', odnimUdarom('shovel', 0.5) === 3,
+    `${odnimUdarom('shovel', 0.5)} из трёх, стоящих плотно`);
+  check('веером пошире лопата достаёт не всех', odnimUdarom('shovel', 1.1) === 2,
+    `${odnimUdarom('shovel', 1.1)} из трёх — дуга не круговая`);
+
+  /* Отрицательный контроль: мах — привилегия лопаты, а не всех подряд. */
+  const прочие = ['bat', 'crowbar', 'hockey', 'pipe'].map((w) => odnimUdarom(w, 0.5));
+  check('остальные бьют одного', прочие.every((k) => k === 1), прочие.join(', '));
+
+  /* Клюшка достаёт оттуда, куда безоружный не дотянется. */
+  const hockey = WEAPONS.hockey.reach;
+  const bare = MOVES.hand.reach;
+  check('клюшкой бьёшь вне их досягаемости', hockey > bare + 20,
+    `${hockey} против ${bare} у голых рук`);
+
+  /* Лом громче всех: за него платят вниманием этажа. */
+  const шум = Object.values(WEAPONS).filter((w) => w.kind === 'melee').map((w) => w.noise);
+  check('лом — самое громкое из ближнего', WEAPONS.crowbar.noise === Math.max(...шум),
+    `${WEAPONS.crowbar.noise} против ${Math.max(...шум.filter((n) => n !== WEAPONS.crowbar.noise))}`);
+}
+
+/* --- петля для витрины -------------------------------------------------- */
+
+/*
+ * Карточка на сайте показывает три секунды игры, и это единственное, что
+ * увидит человек, прежде чем решить, открывать её или нет. Поэтому
+ * важно не «сцена работает», а КОГДА в ней что-то происходит.
+ *
+ * Проверка заведена после того, как петля молча испортилась: в неё
+ * влезало одно убийство на 2.62 секунды, то есть две с половиной секунды
+ * из трёх человек смотрел, как кто-то идёт. Ничего не падало — просто
+ * расстояния перестали попадать в долю, а разброс тут ступеньками, а не
+ * плавный.
+ */
+{
+  const world = createWorld(showcaseLevel());
+  stageShowcase(world);
+  const kills = [];
+  let seen = 0;
+  for (let i = 0; i < SHOWCASE_SECONDS / DT; i += 1) {
+    update(world, DT, showcaseIntent(world.time, world));
+    if (world.kills > seen) { seen = world.kills; kills.push(Math.round(world.time * 100) / 100); }
+  }
+
+  check('в петлю влезают два убийства', kills.length === 2, kills.join(', ') || 'ни одного');
+  check('первое — в начале, а не в конце', kills[0] > 0.6 && kills[0] < 1.3,
+    `${kills[0]} с`);
+  check('второе — во второй половине', kills[1] > 1.7 && kills[1] < 2.6,
+    `${kills[1]} с`);
+  check('петля не кончается пустотой', SHOWCASE_SECONDS - kills[kills.length - 1] > 0.5,
+    `${(SHOWCASE_SECONDS - kills[kills.length - 1]).toFixed(2)} с после последнего`);
+}
+
+/* --- повадка «рывок»: замах, бросок, открытая спина -------------------- */
+
+/*
+ * Рывок обязан быть читаемым и наказуемым, иначе это просто «он вдруг
+ * оказался рядом». Проверяются три вещи, и каждая — про игрока:
+ *
+ * 1. перед броском есть замах, и он длится столько, чтобы человек успел;
+ * 2. направление берётся в момент прыжка и дальше НЕ правится — иначе
+ *    шаг в сторону перестаёт быть ответом, а рывок превращается в
+ *    самонаведение;
+ * 3. после броска враг какое-то время стоит открытым.
+ */
+function rivok({ dodge }) {
+  const world = createWorld(CAMPAIGN[0]);
+  const player = world.player;
+  player.weapon = 'bat';
+
+  /* Оставляем одного рывкового и ставим его перед игроком. */
+  const dasher = world.enemies.find((e) => e.temper === 'рывок');
+  for (const e of world.enemies) if (e !== dasher) e.alive = false;
+  dasher.x = player.x + 130;
+  dasher.y = player.y;
+  dasher.home = { x: dasher.x, y: dasher.y };
+  dasher.weapon = null;
+  dasher.state = 'chase';
+  dasher.notice = 1;
+  dasher.lost = 0;
+
+  const seen = { tell: 0, dash: 0, open: 0 };
+  let minGap = Infinity;
+  let dodged = false;
+
+  for (let i = 0; i < 4 / DT; i += 1) {
+    if (dasher.tell > 0) seen.tell += 1;
+    if (dasher.dash > 0) { seen.dash += 1; minGap = Math.min(minGap, Math.hypot(dasher.x - player.x, dasher.y - player.y)); }
+    if (dasher.open > 0) seen.open += 1;
+
+    const intent = { moveX: 0, moveY: 0, aimAngle: 0, attack: false };
+    /* Шаг в сторону делается по замаху — то есть по тому, что видно. */
+    if (dodge && dasher.tell > 0) { intent.moveY = -1; dodged = true; }
+    update(world, DT, intent);
+    /* Выходим, когда открытая спина КОНЧИЛАСЬ, а не через шесть кадров
+       после её начала: первая версия обрывала счёт на 0.12 с и объявляла
+       поломкой исправное окно в 0.55. Мерка, которая сама себя обрезает,
+       врёт увереннее всего. */
+    if (seen.open > 0 && dasher.open <= 0) break;
+  }
+  return { ...seen, minGap: Math.round(minGap), dodged, hp: player.hp };
+}
+
+{
+  const прямо = rivok({ dodge: false });
+  check('рывок предупреждает замахом', прямо.tell * DT > 0.25,
+    `${(прямо.tell * DT).toFixed(2)} с замаха`);
+  check('после броска враг стоит открытым', прямо.open * DT > 0.4,
+    `${(прямо.open * DT).toFixed(2)} с открытой спины`);
+  check('стоял на месте — достали', прямо.minGap < 40, `подошёл на ${прямо.minGap}`);
+
+  const вбок = rivok({ dodge: true });
+  check('шаг в сторону по замаху уводит с линии', вбок.dodged && вбок.minGap > прямо.minGap,
+    `мимо на ${вбок.minGap} против ${прямо.minGap} без уворота`);
+  check('уворот стоит здоровья дешевле', вбок.hp >= прямо.hp,
+    `hp ${вбок.hp} против ${прямо.hp}`);
+}
+
+/* --- исход не зависит от частоты кадров ------------------------------- */
+
+/*
+ * Среда прогона даёт не шестьдесят кадров в секунду, а сколько получится:
+ * у соседей безголовый браузер выдавал один кадр вместо шестидесяти, и
+ * тогда «уровень проходится» означало «никто не успел выстрелить».
+ *
+ * У этой игры такого быть не должно: всё движение идёт через dt, а не
+ * через счёт кадров. Проверяется это прямо — один и тот же бой считается
+ * с разным шагом, и исход обязан совпасть.
+ *
+ * Совпадать обязан ИСХОД, а не длительность. Длительность честно
+ * расходится: шаг зажат сверху пятьюдесятью миллисекундами (в игре тем же
+ * числом), поэтому при 60 кадрах цепочка занимает 913 мс игрового
+ * времени, а при 20 и ниже — 1174. Ниже двадцати все частоты дают
+ * одинаковый мир: зажим превращает медленную среду в замедленную съёмку,
+ * а не в другую физику. Значит числа «за сколько» из прогона переносить
+ * на человека нельзя, а числа «что случилось» — можно.
+ *
+ * Проверено поломкой, и поломка сузила заявку. Остывание игрока,
+ * посчитанное кадрами вместо времени, роняет проверку сразу: «расходится
+ * при 20, 11, 5, 1 кадр/с». А то же самое, сделанное с остыванием ВРАГА,
+ * проходит незамеченным — бой здесь ставится вплотную и заканчивается
+ * прежде, чем враги успевают ответить. Значит проверка стережёт путь
+ * удара игрока, и только его; повадки врагов при разной частоте кадров
+ * не проверяет никто.
+ */
+function ishod(fps) {
+  const dt = Math.max(0, Math.min(0.05, 1 / fps));
+  const world = createWorld(CAMPAIGN[0]);
+  world.player.weapon = 'bat';
+  for (let i = 0; i < Math.ceil(20 / dt); i += 1) {
+    const victim = world.enemies.find((e) => e.alive);
+    if (!victim) break;
+    world.player.x = victim.x - 20;
+    world.player.y = victim.y;
+    world.player.angle = 0;
+    update(world, dt, { moveX: 0, moveY: 0, aimAngle: null, attack: true });
+  }
+  return { kills: world.kills, alive: world.enemies.filter((e) => e.alive).length };
+}
+
+{
+  const base = ishod(60);
+  const rates = [30, 20, 11, 5, 1];
+  const wrong = rates.filter((fps) => {
+    const r = ishod(fps);
+    return r.kills !== base.kills || r.alive !== base.alive;
+  });
+  check('исход боя не зависит от частоты кадров', wrong.length === 0,
+    wrong.length ? `расходится при ${wrong.join(', ')} кадр/с` : `${base.kills} убито при 60, 30, 20, 11, 5 и 1 кадр/с`);
 }
 
 console.log(report.join('\n'));

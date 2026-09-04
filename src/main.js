@@ -1,5 +1,5 @@
 /*
- * ОДИН УДАР — сборка игры.
+ * HOTLINE ABAKAN — сборка игры.
  *
  * Здесь живёт то, что связывает остальное: цикл кадра, камера, прицел,
  * экраны между попытками и перезапуск. Правил боя тут нет — они в
@@ -17,7 +17,9 @@ import { AIM_CONE, assistAim, closeThreat, meleeSnap, hasTargetUnderAim, lockTar
 import { createRenderer } from './render.js';
 import { createAssets } from './assets.js';
 import { createInput } from './input.js';
-import { createAudio } from './audio.js';
+import { createAudio, RECIPES } from './audio.js';
+import { measureRecipe } from './soundmeter.js';
+import { EXIT_URL, EXIT_QUESTION, needsConfirm } from './exit.js';
 import { parseHash, buildLink, compare, cleanNick, NICK_KEY } from './challenge.js';
 import { createScore, readBest, writeBest, rankFor } from './score.js';
 
@@ -1012,6 +1014,23 @@ if (pauseButton) {
   });
 }
 
+/*
+ * Выход на сайт.
+ *
+ * Переход отменяется ПЕРВЫМ действием, до всякого вопроса. Если сначала
+ * спросить, а отменять потом, браузер успевает уйти по ссылке, пока
+ * человек читает вопрос, — и «отмена» отменяет то, что уже случилось.
+ * Порядок здесь и есть вся правка; сам вопрос — мелочь.
+ */
+const homeLink = document.querySelector('.game-home-menu');
+if (homeLink) {
+  homeLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (needsConfirm(scene) && !window.confirm(EXIT_QUESTION)) return;
+    window.location.href = EXIT_URL;
+  });
+}
+
 input.bindButton($('btnAttack'), 'attack');
 input.bindButton($('btnPickup'), 'pickup');
 input.bindButton($('btnThrow'), 'throw');
@@ -1100,6 +1119,88 @@ window.avto = {
      событие выхода живёт один кадр; а посмотреть на карточку глазами
      надо после каждой правки её вёрстки. */
   screens: { call: callScreen, clear: clearScreen, dead: deathScreen, pause: pauseScreen },
+
+  /*
+   * Пульт.
+   *
+   * Игру проверяют не только руками: половина проверок идёт по кадрам и
+   * коду, а открыть её и пощупать нельзя — на чужих колонках это шумит.
+   * Поэтому всё, что нужно спросить у живой страницы, спрашивается
+   * отсюда: состояние, звук, этаж. Ничего из этого не меняет правил —
+   * пульт только смотрит и переключает то, что и так переключаемо
+   * кнопками.
+   */
+  state() {
+    if (!world) return { scene, level: level.title, ready: false };
+    return {
+      scene,
+      floor: level.title,
+      index: levelIndex + 1,
+      theme: level.theme,
+      seed: level.seed || null,
+      kills: world.kills,
+      total: world.total,
+      seconds: Math.round(world.time * 10) / 10,
+      exitOpen: world.exitOpen,
+      player: {
+        alive: world.player.alive,
+        weapon: world.player.weapon,
+        hp: world.player.hp,
+        x: Math.round(world.player.x),
+        y: Math.round(world.player.y),
+      },
+      enemies: world.enemies.filter((e) => e.alive).length,
+      muted: audio.isMuted(),
+      showcase,
+      attempt: attempts,
+    };
+  },
+
+  /*
+   * Сыграть звук по имени; без имени — список имён.
+   *
+   * Возвращает расчётные числа тем же измерителем, каким их считает
+   * прогон: чтобы чужой измеритель на живой странице мог сверить выход с
+   * расчётом на одном предмете, а не с числом из чьей-то записки.
+   * Расчёт доказывает ноты, не колонки, — сверка и нужна затем, чтобы
+   * узнать, стоит ли между ними что-то, чего никто не мерил.
+   */
+  sfx(name) {
+    if (!name) return Object.keys(RECIPES);
+    if (!RECIPES[name]) return `нет такого звука; есть: ${Object.keys(RECIPES).join(', ')}`;
+    audio.unlock();
+    audio.sfx(name);
+    const m = measureRecipe(RECIPES[name]);
+    return {
+      name,
+      расчётныйПик: Math.round(m.peak * 1000) / 1000,
+      расчётныйСредний: Math.round(m.rms * 10000) / 10000,
+      секунды: Math.round(m.seconds * 100) / 100,
+      слои: RECIPES[name].length,
+    };
+  },
+
+  /* Звук целиком: спросить и переключить. */
+  mute(on) {
+    if (on !== undefined) {
+      audio.setMuted(Boolean(on));
+      ui.mute.dataset.off = audio.isMuted() ? '1' : '0';
+      ui.mute.textContent = audio.isMuted() ? 'ЗВУК ВЫКЛ' : 'ЗВУК ВКЛ';
+    }
+    return audio.isMuted();
+  },
+
+  /* Прыжок на этаж кампании: пультом, а не подбором кода в адресе. */
+  level(number) {
+    const index = Math.max(1, Math.min(CAMPAIGN.length, Number(number) || 1)) - 1;
+    custom = false;
+    levelIndex = index;
+    attempts = 0;
+    level = CAMPAIGN[index];
+    levelCode = encode(level);
+    callScreen();
+    return { index: index + 1, title: level.title, of: CAMPAIGN.length };
+  },
   /*
    * Снаряд для витрины: ставит сцену и играет её петлёй по три секунды.
    * Возвращает длительность петли, чтобы снимающий знал, сколько писать.

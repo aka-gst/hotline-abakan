@@ -1,5 +1,5 @@
 /*
- * ОДИН УДАР — прогон ссылки-вызова.
+ * HOTLINE ABAKAN — прогон ссылки-вызова.
  *
  *   node tests/challenge.mjs
  *
