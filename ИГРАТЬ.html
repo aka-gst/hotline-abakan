@@ -5271,10 +5271,11 @@
     const player = world.player;
     const weapon = WEAPONS[player.weapon];
     if (force || ui.weapon.textContent !== weapon.name) ui.weapon.textContent = weapon.name;
-    const icon = player.weapon === "fists" ? "data:image/gif;base64," : `assets/items/${player.weapon}.png`;
+    const fists = player.weapon === "fists";
+    const icon = `assets/items/${player.weapon}.png`;
     if (ui.weaponIcon) {
-      ui.weaponIcon.hidden = false;
-      if (!ui.weaponIcon.src.endsWith(icon)) ui.weaponIcon.src = icon;
+      ui.weaponIcon.hidden = fists;
+      if (!fists && !ui.weaponIcon.src.endsWith(icon)) ui.weaponIcon.src = icon;
     }
     if (weapon.kind === "gun") {
       ui.ammo.innerHTML = "<i></i>".repeat(Math.max(0, player.ammo));
