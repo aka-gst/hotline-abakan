@@ -10,5 +10,5 @@ test('offline artifact has no placeholder GIF and keeps real weapon resources', 
   assert.match(html, /window\.__OFFLINE_RESOURCES__/);
   assert.match(html, /HTMLImageElement,HTMLMediaElement/);
   assert.match(html, /player\.weapon === "fists"/);
-  assert.match(html, /ui\.weaponIcon\.hidden = fists/);
+  assert.match(html, /ui\.weaponIcon\.hidden = false/);
 });
