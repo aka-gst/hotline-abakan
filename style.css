@@ -353,6 +353,17 @@ html, body {
   animation: comboWarn .28s steps(2, end) infinite;
 }
 
+/* FLOW — это не второй счётчик, а состояние тела: панель меняет материал,
+   когда убийства идут почти без пауз. Игрок считывает его периферией. */
+.combo[data-flow="1"] {
+  border-color: #7dffb2;
+  background: #072017e8;
+  box-shadow: 0 0 28px #7dffb244;
+}
+.combo[data-flow="1"] b { text-shadow: 0 0 16px #7dffb2; }
+.combo[data-flow="1"] i { background: #7dffb2; }
+.combo[data-flow="1"] .combo-label { color: #baffd2; }
+
 @keyframes comboWarn {
   from { border-color: var(--pink); }
   to { border-color: #ffe06b; }

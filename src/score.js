@@ -15,6 +15,8 @@ const EXECUTION = 150;      /* добить лежачего дороже: эт�
 const CROSSFIRE = 50;       /* враг застрелил своего — заслуга косвенная */
 const COMBO_WINDOW = 4;     /* столько секунд цепочка ждёт следующего убийства */
 const COMBO_CAP = 8;
+const FLOW_WINDOW = 1.35;
+const FLOW_CAP = 6;
 
 /* Во сколько очков оценивается один враг, если играть хорошо. */
 const PAR_PER_ENEMY = 900;
@@ -45,6 +47,11 @@ export function createScore(level, attempts = 1) {
     combo: 0,
     comboLeft: 0,
     maxCombo: 0,
+    flow: 0,
+    flowLeft: 0,
+    maxFlow: 0,
+    elapsed: 0,
+    lastKillAt: -99,
     kills: 0,
     executions: 0,
     silent: 0,
@@ -65,6 +72,12 @@ export function createScore(level, attempts = 1) {
     state.combo = Math.min(COMBO_CAP, state.combo + 1);
     state.comboLeft = COMBO_WINDOW;
     state.maxCombo = Math.max(state.maxCombo, state.combo);
+
+    const gap = state.elapsed - state.lastKillAt;
+    state.flow = gap <= FLOW_WINDOW ? Math.min(FLOW_CAP, state.flow + 1) : 1;
+    state.flowLeft = FLOW_WINDOW;
+    state.maxFlow = Math.max(state.maxFlow, state.flow);
+    state.lastKillAt = state.elapsed;
     state.kills += 1;
 
     if (event.execution) state.executions += 1;
@@ -95,11 +108,20 @@ export function createScore(level, attempts = 1) {
    * меньше, но окно должно оставаться тем же самым.
    */
   function update(dt) {
-    if (state.comboLeft <= 0) return;
-    state.comboLeft -= dt;
-    if (state.comboLeft <= 0) {
-      state.comboLeft = 0;
-      state.combo = 0;
+    state.elapsed += dt;
+    if (state.comboLeft > 0) {
+      state.comboLeft -= dt;
+      if (state.comboLeft <= 0) {
+        state.comboLeft = 0;
+        state.combo = 0;
+      }
+    }
+    if (state.flowLeft > 0) {
+      state.flowLeft -= dt;
+      if (state.flowLeft <= 0) {
+        state.flowLeft = 0;
+        state.flow = 0;
+      }
     }
   }
 
@@ -125,6 +147,7 @@ export function createScore(level, attempts = 1) {
 
     add('РАЗНООБРАЗИЕ', (state.weapons.size - 1) * 200);
     add('МАКС. КОМБО ×' + state.maxCombo, (state.maxCombo - 1) * 150);
+    if (state.maxFlow > 1) add('НА ОДНОМ ДЫХАНИИ ×' + state.maxFlow, (state.maxFlow - 1) * 125);
     if (state.shots === 0 && world.kills > 0) add('НИ ОДНОГО ВЫСТРЕЛА', 800);
     if (state.executions > 0) add('ДОБИТО ЛЕЖАЧИХ ' + state.executions, state.executions * 100);
     /* Тихая работа стоит дороже громкой: она требует терпения, а не темпа. */

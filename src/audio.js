@@ -156,6 +156,7 @@ export function createAudio() {
   let muted = false;
   let started = false;
   let intensity = 0;
+  let menuMode = false;
   let onBeat = null;
 
   /*
@@ -573,13 +574,22 @@ export function createAudio() {
 
   /* В меню трек не выключается, а глохнет — как будто дверь в зал закрыли. */
   function setMenu(inMenu) {
+    menuMode = Boolean(inMenu);
     if (!ctx) return;
-    const target = inMenu ? 420 : 18000;
+    const target = inMenu ? 420 : 12000 + intensity * 6000;
     musicFilter.frequency.setTargetAtTime(target, ctx.currentTime, 0.15);
-    musicBus.gain.setTargetAtTime(inMenu ? 0.32 : 0.55, ctx.currentTime, 0.15);
+    musicBus.gain.setTargetAtTime(inMenu ? 0.32 : 0.50 + intensity * 0.08, ctx.currentTime, 0.15);
   }
 
-  function setIntensity(value) { intensity = Math.max(0, Math.min(1, value)); }
+  function setIntensity(value) {
+    intensity = Math.max(0, Math.min(1, value));
+    /* Файловая музыка тоже должна «открывать дверь» в FLOW, а не только
+       синтетический fallback. Мы не ускоряем трек — меняем только воздух/плотность. */
+    if (ctx && !menuMode) {
+      musicFilter.frequency.setTargetAtTime(10500 + intensity * 7500, ctx.currentTime, 0.08);
+      musicBus.gain.setTargetAtTime(0.49 + intensity * 0.09, ctx.currentTime, 0.08);
+    }
+  }
 
   function setMuted(value) {
     muted = value;

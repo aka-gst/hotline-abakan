@@ -111,6 +111,9 @@ const SFX_BY_EVENT = {
 
 let custom = false;
 let levelIndex = 0;
+/* После ручной кампании игра переходит в бесконечную процедурную ночь. */
+let endlessDepth = 0;
+const endlessBase = ((Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0) || 1;
 let challenge = null;   /* чужой результат, если этаж открыт по ссылке */
 let locked = null;      /* цель, за которую держится прицел на клавиатуре */
 let level = CAMPAIGN[0];
@@ -445,9 +448,41 @@ function deathScreen() {
   ui.dead.hidden = false;
 }
 
-/* Есть ли следующий этаж кампании. Чужой этаж по ссылке продолжения не имеет. */
+/*
+ * У кампании теперь нет искусственного конца: после последних ручных
+ * этажей начинается процедурная ночь. Чужой/сохранённый этаж по ссылке
+ * остаётся самостоятельным и никуда сам не ведёт.
+ */
 function hasNextFloor() {
-  return !custom && levelIndex + 1 < CAMPAIGN.length;
+  return !custom;
+}
+
+function nextIsProcedural() {
+  return !custom && levelIndex + 1 >= CAMPAIGN.length;
+}
+
+function proceduralSeed(depth) {
+  /* Золотое сечение хорошо разносит соседние номера по 32-битному пространству. */
+  return ((endlessBase + Math.imul(depth, 0x9e3779b1)) >>> 0) || depth || 1;
+}
+
+function advanceFloor() {
+  if (custom) return false;
+  attempts = 0;
+
+  if (levelIndex + 1 < CAMPAIGN.length) {
+    levelIndex += 1;
+    endlessDepth = 0;
+    level = CAMPAIGN[levelIndex];
+  } else {
+    endlessDepth += 1;
+    levelIndex = CAMPAIGN.length + endlessDepth - 1;
+    level = generateLevel(proceduralSeed(endlessDepth), { depth: endlessDepth });
+  }
+
+  levelCode = encode(level);
+  callScreen();
+  return true;
 }
 
 
@@ -469,6 +504,7 @@ function clearScreen() {
   pulse.cleared(level, levelIndex, world, result, attempts);
   const record = writeBest(levelCode, result, world.time);
   const more = hasNextFloor();
+  const proceduralNext = nextIsProcedural();
   rememberFloor(result);
 
   /* Вызов принят или нет — это первое, что должно быть видно на экране. */
@@ -482,16 +518,18 @@ function clearScreen() {
   showVeil({
     tone: 'clear',
     kicker: duel ? (duel.beaten ? 'ВЫЗОВ ОТБИТ' : 'ВЫЗОВ НЕ ВЗЯТ') : 'ЭТАЖ СДАН',
-    title: duel ? (duel.beaten ? 'ТЫ БЫСТРЕЕ' : 'ПОКА МЕДЛЕННЕЕ') : (more ? 'СЛЕДУЮЩЕЕ СООБЩЕНИЕ' : 'ТИХО'),
+    title: duel ? (duel.beaten ? 'ТЫ БЫСТРЕЕ' : 'ПОКА МЕДЛЕННЕЕ') : (more ? (proceduralNext ? 'НОЧЬ ПРОДОЛЖАЕТСЯ' : 'СЛЕДУЮЩЕЕ СООБЩЕНИЕ') : 'ТИХО'),
     text: duel
       ? 'Отправь ссылку обратно — в ней твой результат и тот же самый этаж.'
       : (more
-        ? 'Автоответчик уже мигает. Очки платят за темп: цепочка обрывается через четыре секунды без убийства.'
+        ? (proceduralNext
+          ? 'Ручные адреса закончились. Дальше комнаты, засады и оружие собираются из зерна; каждый следующий этаж плотнее предыдущего.'
+          : 'Автоответчик уже мигает. Очки платят за темп: цепочка обрывается через четыре секунды без убийства.')
         : 'Этаж сдан. Отправь его кому-нибудь: ссылка несёт и уровень, и твоё время.'),
     stats: `<span>ВРЕМЯ ${formatTime(world.time)}</span><span>ПОПЫТОК ${attempts}</span>`
       + (verdict ? `<span>${verdict}</span>` : ''),
     share: true,
-    action: more ? 'СЛЕДУЮЩИЙ ЭТАЖ' : 'ПРОЙТИ ЧИЩЕ',
+    action: more ? (proceduralNext ? 'ДАЛЬШЕ В НОЧЬ' : 'СЛЕДУЮЩИЙ ЭТАЖ') : 'ПРОЙТИ ЧИЩЕ',
     second: more ? 'ПРОЙТИ ЭТОТ ЧИЩЕ' : 'ВЫЙТИ В МЕНЮ',
     result,
     best: record.best,
@@ -663,10 +701,11 @@ function updateHud(force) {
     ui.combo.hidden = false;
     ui.comboBar.style.transform = `scaleX(${left})`;
     ui.combo.dataset.urgent = left < 0.3 ? '1' : '0';
+    ui.combo.dataset.flow = score.state.flow >= 3 ? '1' : '0';
 
     if (ui.combo.dataset.value !== String(combo)) {
       ui.combo.dataset.value = String(combo);
-      ui.comboValue.textContent = `×${combo}`;
+      ui.comboValue.textContent = score.state.flow > 2 ? `×${combo} · FLOW ${score.state.flow}` : `×${combo}`;
       /* Пересборка анимации: без неё каждое следующее убийство не «щёлкает». */
       ui.combo.style.animation = 'none';
       void ui.combo.offsetWidth;
@@ -675,6 +714,7 @@ function updateHud(force) {
   } else if (!ui.combo.hidden) {
     ui.combo.hidden = true;
     ui.combo.dataset.value = '';
+    ui.combo.dataset.flow = '0';
   }
 }
 
@@ -819,13 +859,18 @@ function step(now) {
     score.feed(world.events, (event, gain, combo) => {
       if (event.by !== 'player' || event.x === undefined) return;
       popNumber(world, event.x, event.y, `+${gain}`,
-        combo > 1 ? '#ffe06b' : '#ffffff');
+        score.state.flow >= 3 ? '#7dffb2' : combo > 1 ? '#ffe06b' : '#ffffff');
+      /* Чем лучше цепочка, тем меньше убийство тормозит следующий ввод.
+         Это не бафф урона, а снятие собственного кинематографического тормоза. */
+      if (score.state.flow >= 4) world.fx.hitstop = Math.min(world.fx.hitstop, 0.018);
     });
     score.update(dt);
     drainEvents();
 
     const alerted = world.enemies.filter((e) => e.alive && e.state === 'chase').length;
-    audio.setIntensity(world.total ? alerted / world.total : 0);
+    const danger = world.total ? alerted / world.total : 0;
+    const flowHeat = Math.min(0.88, (score.state.flow || 0) / 6 * 0.88);
+    audio.setIntensity(Math.max(danger, flowHeat));
 
     if (world.state === 'dead') {
       deathHold = 0.14;
@@ -941,7 +986,9 @@ ui.veilAction.addEventListener('click', (event) => {
 
   if (scene === 'call') { startLevel(level); offerHomeScreen(); }
   else if (scene === 'dead') startLevel(level, { silent: true });
-  else if (scene === 'clear') { attempts = 0; startLevel(level, { silent: true }); }
+  else if (scene === 'clear') {
+    if (!advanceFloor()) { attempts = 0; startLevel(level, { silent: true }); }
+  }
   else if (scene === 'pause') { hideVeil(); scene = 'play'; }
 });
 
@@ -1195,6 +1242,7 @@ window.avto = {
     const index = Math.max(1, Math.min(CAMPAIGN.length, Number(number) || 1)) - 1;
     custom = false;
     levelIndex = index;
+    endlessDepth = 0;
     attempts = 0;
     level = CAMPAIGN[index];
     levelCode = encode(level);

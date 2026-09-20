@@ -66,6 +66,9 @@ export const ENTITY = {
   W_SHOVEL: 11,   /* лопата на полу */
   W_CROWBAR: 12,  /* лом на полу */
   W_HOCKEY: 13,   /* клюшка на полу */
+
+  /* Дальний стрелок: отдельный тип уровня, чтобы encounter мог гарантировать роль. */
+  SNIPER: 14,
 };
 
 /* Экранный словарь для рисования уровней руками. */
@@ -92,6 +95,7 @@ const CHAR_ENTITY = {
   l: ENTITY.W_SHOVEL,
   c: ENTITY.W_CROWBAR,
   h: ENTITY.W_HOCKEY,
+  q: ENTITY.SNIPER,
 };
 
 export function blocksMove(tile) {

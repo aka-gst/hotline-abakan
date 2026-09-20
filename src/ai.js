@@ -210,6 +210,7 @@ export function thinkEnemy(world, enemy, dt, speed) {
       }
 
       const weapon = WEAPONS[enemy.weapon] || null;
+      const melee = !weapon || weapon.kind === 'melee';
 
       /*
        * Рывок разбирается до всего остального: пока он идёт, враг не
@@ -219,7 +220,7 @@ export function thinkEnemy(world, enemy, dt, speed) {
        * не доходило бы в самом частом случае — когда цель в пределах
        * удара, — и рывок бы просто не случался.
        */
-      if (enemy.temper === 'рывок' && !weapon) {
+      if (enemy.temper === 'рывок' && melee) {
         if (enemy.open > 0) {
           /* Открытая спина: стоит, не бьёт, и это шанс игрока. */
           enemy.open -= dt;
@@ -232,7 +233,8 @@ export function thinkEnemy(world, enemy, dt, speed) {
           result.vx = Math.cos(enemy.dashAngle) * speed.run * DASH_SPEED;
           result.vy = Math.sin(enemy.dashAngle) * speed.run * DASH_SPEED;
           /* Достал по дороге — бьёт; промахнулся — встаёт открытым. */
-          if (dist < (MOVES.hand.reach + BODY - 6) && enemy.cooldown <= 0) result.attack = true;
+          const dashReach = (weapon ? weapon.reach : MOVES.hand.reach) + BODY - 6;
+          if (dist < dashReach && enemy.cooldown <= 0) result.attack = true;
           if (enemy.dash <= 0) enemy.open = DASH_OPEN;
           break;
         }
@@ -265,7 +267,7 @@ export function thinkEnemy(world, enemy, dt, speed) {
        * вместо того, чтобы толкаться в одной двери.
        */
       let flank = null;
-      if (enemy.temper === 'обход' && !weapon && visible && dist > 110
+      if (enemy.temper === 'обход' && melee && visible && dist > 110
           && hasSight(world, enemy.x, enemy.y, player.x, player.y)) {
         const across = toPlayer + Math.PI / 2 * (enemy.side || 1);
         flank = {
@@ -283,27 +285,53 @@ export function thinkEnemy(world, enemy, dt, speed) {
          * на широком мониторе достанет издалека — но выстрела из-за края
          * кадра не будет нигде.
          */
-        const reach = Math.min(330, world.viewRadius || 260);
+        const sniper = enemy.temper === 'снайпер';
+        const reach = Math.min(sniper ? 420 : 330, world.viewRadius || 260);
         const shootable = visible && dist < reach && Math.abs(angleDelta(enemy.angle, toPlayer)) < 0.2;
 
-        /* Стрелок держит дистанцию: вплотную он беспомощен, и это шанс игрока. */
-        if (dist < 90) {
+        /*
+         * После выстрела стрелок меняет линию огня. В старой версии он
+         * стоял на месте и превращался в турель: достаточно было один раз
+         * понять угол. Короткий шаг вбок создаёт новую задачу, но не
+         * читерит — телеграф следующего выстрела остаётся тем же.
+         */
+        enemy.relocate = Math.max(0, (enemy.relocate || 0) - dt);
+        if (enemy.relocate > 0 && dist > 105) {
+          const strafe = toPlayer + Math.PI / 2 * (enemy.side || 1);
+          const strafeSpeed = enemy.temper === 'перебежка' ? 1.7 : sniper ? 0.45 : 1.15;
+          result.vx = Math.cos(strafe) * speed.walk * strafeSpeed;
+          result.vy = Math.sin(strafe) * speed.walk * strafeSpeed;
+        } else if (dist < (sniper ? 130 : enemy.temper === 'охотник' ? 70 : 90)) {
+          /* Стрелок держит дистанцию: вплотную он беспомощен, и это шанс игрока. */
           const away = toPlayer + Math.PI;
           result.vx = Math.cos(away) * speed.walk;
           result.vy = Math.sin(away) * speed.walk;
         } else if (!shootable) {
-          const step = flowStep(world, enemy) || { x: Math.cos(toPlayer), y: Math.sin(toPlayer) };
-          result.vx = step.x * speed.run;
-          result.vy = step.y * speed.run;
+          /* Снайпер не превращается в ещё одного преследователя: если уже видит
+             игрока на рабочей дистанции, держит позицию и доводит длинный телеграф. */
+          if (!(sniper && visible && dist >= 130 && dist <= reach)) {
+            let step = flowStep(world, enemy) || { x: Math.cos(toPlayer), y: Math.sin(toPlayer) };
+            if (enemy.temper === 'охотник' && visible && dist > 115) {
+              const across = toPlayer + Math.PI / 2 * (enemy.side || 1);
+              const flankPoint = { x: player.x + Math.cos(across) * 70, y: player.y + Math.sin(across) * 70 };
+              step = flowStepToward(world, enemy, flankPoint);
+            }
+            const chaseSpeed = enemy.temper === 'охотник' ? speed.run * 1.12 : sniper ? speed.walk * .72 : speed.run;
+            result.vx = step.x * chaseSpeed;
+            result.vy = step.y * chaseSpeed;
+          }
         }
 
-        if (shootable && enemy.cooldown <= 0) {
+        if (shootable && enemy.relocate <= 0 && enemy.cooldown <= 0) {
           /* Замах перед выстрелом: у игрока должно быть время уйти с линии. */
           enemy.windup = (enemy.windup || 0) + dt;
-          if (enemy.windup > 0.42) {
+          const tell = sniper ? 0.68 : enemy.temper === 'перебежка' ? 0.34 : enemy.temper === 'охотник' ? 0.38 : 0.46;
+          if (enemy.windup > tell) {
             enemy.windup = 0;
             result.attack = true;
-            enemy.cooldown = 0.9 + Math.random() * 0.5;
+            enemy.cooldown = sniper ? 1.45 + Math.random() * 0.35 : enemy.temper === 'охотник' ? 0.72 + Math.random() * 0.34 : 0.9 + Math.random() * 0.5;
+            enemy.relocate = sniper ? 0.12 : enemy.temper === 'перебежка' ? 0.72 + Math.random() * 0.3 : 0.38 + Math.random() * 0.28;
+            enemy.side = -(enemy.side || 1);
           }
         } else {
           enemy.windup = Math.max(0, (enemy.windup || 0) - dt * 2);
@@ -367,7 +395,7 @@ export function thinkEnemy(world, enemy, dt, speed) {
          * украшением — замер показал десять кадров замаха на сорок пять
          * секунд боя.
          */
-        const темп = (enemy.temper === 'рывок' && !weapon) ? speed.walk : speed.run;
+        const темп = (enemy.temper === 'рывок' && melee) ? speed.walk : speed.run;
         result.vx = step.x * темп;
         result.vy = step.y * темп;
         enemy.windup = 0;

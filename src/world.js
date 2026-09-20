@@ -284,6 +284,7 @@ export function turnToward(from, to, step) {
  * дистанцию и стрелять с замахом.
  */
 export const TEMPERS = ['рывок', 'обход'];
+export const GUN_TEMPERS = ['осада', 'перебежка', 'охотник', 'снайпер'];
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 
@@ -498,7 +499,7 @@ export function createWorld(level) {
     const x = entity.x * TILE_SIZE + TILE_SIZE / 2;
     const y = entity.y * TILE_SIZE + TILE_SIZE / 2;
 
-    if (entity.type === 0 || entity.type === 1 || entity.type === 10) {
+    if (entity.type === 0 || entity.type === 1 || entity.type === 10 || entity.type === 14) {
       world.enemies.push({
         kind: entity.type === 10 ? 'brawler' : entity.type === 0 ? 'thug' : 'shooter',
         /*
@@ -508,11 +509,11 @@ export function createWorld(level) {
          * выбирается по месту врага на этаже, а не броском — чтобы этаж
          * всегда игрался одинаково и его можно было выучить.
          */
-        temper: entity.type === 1 ? 'осада' : TEMPERS[(entity.x * 31 + entity.y * 17) % TEMPERS.length],
+        temper: entity.type === 14 ? 'снайпер' : entity.type === 1 ? GUN_TEMPERS[(entity.x * 19 + entity.y * 23) % (GUN_TEMPERS.length - 1)] : TEMPERS[(entity.x * 31 + entity.y * 17) % TEMPERS.length],
         /* Сторона обхода тоже от места, а не от броска. */
         side: ((entity.x + entity.y) % 2) ? 1 : -1,
         weapon: entity.type === 10 ? null : entity.type === 0 ? 'bat' : 'pistol',
-        ammo: entity.type === 0 || entity.type === 10 ? 0 : 6,
+        ammo: entity.type === 0 || entity.type === 10 ? 0 : entity.type === 14 ? 4 : 6,
         hp: BARE_HP,
         move: null,
         moveStart: 0,
