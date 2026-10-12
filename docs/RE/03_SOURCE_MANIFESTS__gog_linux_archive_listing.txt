@@ -1,0 +1,6 @@
+   188564954  Hotline Miami [GOG] [Linux]/gog_hotline_miami_2.0.0.4.sh
+       84350  Hotline Miami [GOG] [Linux]/goodies/hotline_miami_avatars.zip
+     6496815  Hotline Miami [GOG] [Linux]/goodies/hotline_miami_poster.zip
+     5927063  Hotline Miami [GOG] [Linux]/goodies/hotline_miami_wallpapers.zip
+           0  Hotline Miami [GOG] [Linux]/goodies/
+           0  Hotline Miami [GOG] [Linux]/

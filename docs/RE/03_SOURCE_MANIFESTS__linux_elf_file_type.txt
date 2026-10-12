@@ -1,0 +1,1 @@
+/mnt/data/handoff_build/tmp_hm/Hotline: ELF 32-bit LSB executable, Intel i386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2, for GNU/Linux 2.6.18, BuildID[sha1]=2ca59bc303cc6e3ac271d9e14befe106742ca49f, not stripped

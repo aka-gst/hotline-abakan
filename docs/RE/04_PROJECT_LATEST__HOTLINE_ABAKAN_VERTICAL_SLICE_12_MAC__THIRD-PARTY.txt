@@ -1,0 +1,12 @@
+HOTLINE ABAKAN — third-party notices
+
+Runtime:
+- Three.js r128 and its GLTFLoader/OBJLoader are loaded from jsDelivr by the browser.
+- Three.js is licensed under the MIT License.
+
+Bundled art assets include license texts in Game/assets/licenses/.
+Character GLTF files and reused project assets come from the user's existing HOTLINE ABAKAN project materials.
+
+This slice does not bundle external sound recordings. Combat and ambience are synthesized at runtime with WebAudio.
+
+Slice 11 keeps the fuller prop/urban library from the user-provided project archives; the associated bundled license texts remain in Game/assets/licenses/.
