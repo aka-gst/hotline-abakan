@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>HOTLINE ABAKAN — VERTICAL SLICE 12</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game"></div>
+  <div id="flash"></div>
+  <div id="vignette"></div>
+  <div id="cinemaBars"><i></i><b></b></div>
+
+  <div id="hud">
+    <div id="brand">HOTLINE ABAKAN <span>VERTICAL SLICE 12</span></div>
+    <div id="objective"><small>02:14 · ЖУКОВА 3</small><strong>ЛЕСТНИЧНАЯ ПЛОЩАДКА</strong><em>Осмотрись. Первый бой начнёшь сам.</em></div>
+    <div id="status"><span id="room">ПЛОЩАДКА</span><b id="weapon">КУЛАКИ</b></div>
+    <div id="scoreBox"><small>СТИЛЬ</small><strong id="score">000000</strong><em id="style">×1.0</em><span id="styleVerb">ТИХО</span><i id="styleMeter"><b></b></i></div>
+    <div id="lesson"><span>СЕЙЧАС</span><strong>WASD — движение</strong><small>Комната безопасна, пока сам не войдёшь дальше.</small></div>
+    <div id="combatFeed"></div>
+    <div id="tip"><b>J</b> быстрый <b>K</b> тяжёлый <b>L</b> блок / parry <b>SPACE</b> уклон <b>SHIFT</b> тихо <b>F</b> контекст <b>E</b> бросок</div>
+  </div>
+
+  <div id="chapterCard" class="hidden"><small></small><strong></strong><em></em></div>
+  <div id="deathPanel" class="hidden"><small>ОШИБКА</small><strong>ТЫ УМЕР</strong><p>SPACE / J — повторить текущую комнату</p></div>
+  <div id="clearPanel" class="hidden"><small>ЗАДАНИЕ ВЫПОЛНЕНО</small><strong id="clearGrade">—</strong><p id="clearStats">SPACE / R — пройти заново.</p></div>
+
+  <div id="startPanel">
+    <div class="poster">
+      <div class="posterNoise"></div>
+      <div class="eyebrow">02:14 / АБАКАН / ЖУКОВА 3</div>
+      <h1>КВАРТИРА<br><span>ТОЖЕ ДЕРЁТСЯ.</span></h1>
+      <p>«Третий этаж. Кассета в подсобке. Внутри тесно: кухня, спальня, кладовка, гостиная. Мебель режет обзор, двери шумят, труба одна на всех. Забери кассету и вернись на лестницу.»</p>
+      <div class="briefGrid">
+        <div><small>ЗАДАНИЕ</small><b>Забрать кассету · зачистить гостиную · вернуться на лестницу</b></div>
+        <div><small>ЗАЩИТА</small><b>L держать — блок · поздно нажать — parry</b></div>
+        <div><small>ШУМ</small><b>Бег слышен рядом. SHIFT — тихий шаг. F открывает дверь без тарана.</b></div>
+      </div>
+      <button id="startButton">ПОДНЯТЬСЯ</button>
+      <div class="keys"><b>WASD</b> движение <b>J</b> быстрый <b>K</b> тяжёлый/свалить <b>L</b> блок/parry <b>SPACE</b> уклон <b>SHIFT</b> тихий шаг <b>F</b> контекст <b>E</b> бросить трубу</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="src/core.js"></script>
+  <script src="src/game.js"></script>
+</body>
+</html>
